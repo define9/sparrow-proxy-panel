@@ -1,0 +1,64 @@
+{
+  "orders": {
+    "title": "Orders",
+    "subtitle": "Review and manage your orders",
+    "empty": "No orders yet",
+    "emptyDesc": "Orders you create will show up here with their payment status.",
+    "orderNo": "Order no.",
+    "planName": "Plan",
+    "amount": "Amount",
+    "discount": "Discount",
+    "currency": "Currency",
+    "statusLabel": "Status",
+    "createdAt": "Created at",
+    "paidAt": "Paid at",
+    "expiresAt": "Expires at",
+    "cancel": "Cancel order",
+    "back": "Back to orders",
+    "cancelConfirm": "Cancel this order? The reserved stock will be released.",
+    "cancelled": "Order cancelled",
+    "cancelFailed": "Failed to cancel. The order status may have changed.",
+    "detailTitle": "Order details",
+    "detailDescription": "Order status changes automatically; illegal transitions are rejected.",
+    "status": {
+      "pending": "Pending",
+      "paid": "Paid",
+      "cancelled": "Cancelled",
+      "expired": "Expired",
+      "refunded": "Refunded"
+    },
+    "timeline": {
+      "created": "Order created",
+      "paid": "Payment completed",
+      "cancelled": "Order cancelled",
+      "expired": "Order expired",
+      "refunded": "Refunded"
+    },
+    "admin": {
+      "title": "Orders",
+      "subtitle": "Filter orders by status, user and time, then complete or refund them",
+      "complete": "Complete manually",
+      "completeConfirm": "Mark this order as paid?",
+      "completeSuccess": "Order marked as paid",
+      "completeTodo": "Subscription provisioning is not implemented yet: only the order status is updated; subscriptions are handled by the subscription module.",
+      "refund": "Refund",
+      "refundConfirm": "Refund this order? Refunded orders cannot be changed anymore.",
+      "refundSuccess": "Order refunded",
+      "filter": {
+        "status": "Status",
+        "user": "User",
+        "keyword": "Search order no. or email",
+        "range": "Time range"
+      },
+      "table": {
+        "orderNo": "Order no.",
+        "user": "User",
+        "planName": "Plan",
+        "amount": "Amount",
+        "status": "Status",
+        "createdAt": "Created at",
+        "actions": "Actions"
+      }
+    }
+  }
+}
