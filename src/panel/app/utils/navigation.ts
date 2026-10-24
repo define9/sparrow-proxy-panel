@@ -1,6 +1,7 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 import { PERMISSIONS } from '@sparrow/contracts/permissions'
 import { pluginNavGroup } from '~/utils/nav/plugins'
+import { nodeNav } from '~/utils/nav/nodes'
 
 /**
  * 菜单模型。
@@ -43,11 +44,7 @@ export const adminNav: NavEntry[] = [
     labelKey: 'nav.nodes',
     icon: 'i-lucide-server',
     permission: PERMISSIONS.ADMIN_NODE_READ,
-    children: [
-      { labelKey: 'nav.nodeList', icon: 'i-lucide-list', to: '/admin/nodes' },
-      { labelKey: 'nav.nodeGroups', icon: 'i-lucide-folder-tree', to: '/admin/nodes/groups' },
-      { labelKey: 'nav.certificates', icon: 'i-lucide-shield-check', to: '/admin/nodes/certificates' }
-    ]
+    children: nodeNav
   },
   { labelKey: 'nav.users', icon: 'i-lucide-users', to: '/admin/users', permission: PERMISSIONS.ADMIN_USER_READ },
   pluginNavGroup,
