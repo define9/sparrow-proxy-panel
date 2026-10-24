@@ -119,7 +119,7 @@ const deviceText = (count: number) => (count > 0 ? String(count) : t('subscripti
               variant="ghost"
               color="neutral"
               :to="`/dashboard/subscriptions/${row.original.id}`"
-              :aria-label="t('subscriptions.detail')"
+              :aria-label="t('subscriptions.detail.title')"
             />
           </div>
         </template>

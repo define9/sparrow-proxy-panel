@@ -181,7 +181,7 @@ const statusColor = (value: string) => statusColors[value] ?? { color: 'neutral'
 <template>
   <UDashboardPanel id="dashboard-subscription-detail">
     <template #header>
-      <UDashboardNavbar :title="subscription?.planName || t('subscriptions.detail')">
+      <UDashboardNavbar :title="subscription?.planName || t('subscriptions.detail.title')">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
