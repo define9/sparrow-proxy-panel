@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/nuxt/SKILL.md",
       "computedHash": "b6be0d9140c9fffa04f0519f2900e69793bac303597ed9a8e92c7a9008b59e40"
+    },
+    "nuxt-ui": {
+      "source": "nuxt/ui",
+      "sourceType": "github",
+      "skillPath": "skills/nuxt-ui/SKILL.md",
+      "computedHash": "deacd4aed537a3744e99618dcca2d7258aff871697d3f0c78be49ba731e60907"
     }
   }
 }

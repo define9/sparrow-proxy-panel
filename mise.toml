@@ -1,0 +1,8 @@
+[tools]
+# 项目级工具链；PostgreSQL / Redis 使用本机全局安装的版本
+node = "24"
+pnpm = "12"
+go = "1.27"
+
+[env]
+NUXT_TELEMETRY_DISABLED = "1"

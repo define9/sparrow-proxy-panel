@@ -1,0 +1,29 @@
+{
+  "name": "sparrow-proxy-panel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=@sparrow/panel",
+    "dev:agent": "cd src/agent && go run ./cmd/sparrow-agent run",
+    "build": "turbo run build",
+    "preview": "turbo run preview --filter=@sparrow/panel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "gen": "turbo run gen --filter=@sparrow/contracts",
+    "gen:check": "pnpm gen && git diff --exit-code -- packages/contracts/openapi.json",
+    "db:generate": "pnpm --filter @sparrow/panel db:generate",
+    "db:check": "pnpm db:generate && git diff --exit-code -- src/panel/drizzle/migrations",
+    "db:migrate": "pnpm --filter @sparrow/panel db:migrate",
+    "db:seed": "pnpm --filter @sparrow/panel db:seed",
+    "db:studio": "pnpm --filter @sparrow/panel db:studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.10"
+  }
+}

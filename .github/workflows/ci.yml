@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  panel:
+    name: 面板（类型 / 规范 / 契约 / 构建）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: 契约漂移检测（OpenAPI）
+        run: pnpm gen:check
+
+      - name: 迁移漂移检测（Drizzle）
+        run: |
+          pnpm db:generate
+          git diff --exit-code -- src/panel/drizzle/migrations
+
+      - name: Build
+        run: pnpm build
+        env:
+          NUXT_TELEMETRY_DISABLED: 1
+
+  agent:
+    name: 节点 CLI（Go）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go build -o dist/sparrow-agent ./cmd/sparrow-agent
