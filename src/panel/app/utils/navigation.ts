@@ -4,6 +4,7 @@ import { pluginNavGroup } from '~/utils/nav/plugins'
 import { nodeNav } from '~/utils/nav/nodes'
 import { adminPlanNav, userPlanNav } from '~/utils/nav/plans'
 import { adminOrderNav, userOrderNav } from '~/utils/nav/orders'
+import { subscriptionsNav } from '~/utils/nav/subscriptions'
 
 /**
  * 菜单模型。
@@ -32,7 +33,7 @@ export const userNav: NavEntry[] = [
   { labelKey: 'nav.dashboard', icon: 'i-lucide-gauge', to: '/dashboard' },
   ...userPlanNav,
   ...userOrderNav,
-  { labelKey: 'nav.subscriptions', icon: 'i-lucide-rss', to: '/dashboard/subscriptions' },
+  ...subscriptionsNav,
   { labelKey: 'nav.traffic', icon: 'i-lucide-chart-line', to: '/dashboard/traffic' },
   { labelKey: 'nav.settings', icon: 'i-lucide-settings', to: '/dashboard/settings' }
 ]
