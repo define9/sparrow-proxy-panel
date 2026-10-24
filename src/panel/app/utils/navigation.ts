@@ -2,6 +2,8 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 import { PERMISSIONS } from '@sparrow/contracts/permissions'
 import { pluginNavGroup } from '~/utils/nav/plugins'
 import { nodeNav } from '~/utils/nav/nodes'
+import { adminPlanNav, userPlanNav } from '~/utils/nav/plans'
+import { adminOrderNav, userOrderNav } from '~/utils/nav/orders'
 
 /**
  * 菜单模型。
@@ -28,8 +30,8 @@ export interface NavEntry {
 
 export const userNav: NavEntry[] = [
   { labelKey: 'nav.dashboard', icon: 'i-lucide-gauge', to: '/dashboard' },
-  { labelKey: 'nav.plans', icon: 'i-lucide-package', to: '/dashboard/plans' },
-  { labelKey: 'nav.orders', icon: 'i-lucide-receipt', to: '/dashboard/orders' },
+  ...userPlanNav,
+  ...userOrderNav,
   { labelKey: 'nav.subscriptions', icon: 'i-lucide-rss', to: '/dashboard/subscriptions' },
   { labelKey: 'nav.traffic', icon: 'i-lucide-chart-line', to: '/dashboard/traffic' },
   { labelKey: 'nav.settings', icon: 'i-lucide-settings', to: '/dashboard/settings' }
@@ -37,8 +39,8 @@ export const userNav: NavEntry[] = [
 
 export const adminNav: NavEntry[] = [
   { labelKey: 'nav.dashboard', icon: 'i-lucide-gauge', to: '/admin' },
-  { labelKey: 'nav.plans', icon: 'i-lucide-package', to: '/admin/plans', permission: PERMISSIONS.ADMIN_PLAN_READ },
-  { labelKey: 'nav.orders', icon: 'i-lucide-receipt', to: '/admin/orders', permission: PERMISSIONS.ADMIN_ORDER_READ },
+  ...adminPlanNav,
+  ...adminOrderNav,
   { labelKey: 'nav.subscriptions', icon: 'i-lucide-rss', to: '/admin/subscriptions', permission: PERMISSIONS.ADMIN_SUBSCRIPTION_READ },
   {
     labelKey: 'nav.nodes',
