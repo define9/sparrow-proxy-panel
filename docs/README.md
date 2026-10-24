@@ -51,7 +51,7 @@
 | 菜单 | `UNavigationMenu` + `UDashboardSidebar` + `UDashboardSearch` 命令面板，权限驱动 | [navigation](frontend/navigation.md) |
 | 后端 | Nitro（Nuxt 同仓），REST/JSON，路由类型由 Nuxt 生成 | [overview](architecture/overview.md) |
 | 数据库 | PostgreSQL 17 + Drizzle ORM 0.45 | [data-model](architecture/data-model.md) |
-| 缓存与队列 | Redis 7（缓存/限流/计数器）+ BullMQ（异步任务） | [overview](architecture/overview.md) |
+| 部署形态 | **单机单体**：应用 + PostgreSQL，无 Redis / MQ；缓存与限流用进程内存 | [overview](architecture/overview.md) |
 | CLI 语言 | Go 1.24+（单静态二进制） | [agent-cli](architecture/agent-cli.md) |
 | 跨端契约 | `packages/contracts`（zod）→ OpenAPI → Go 代码生成，CI 检测漂移 | [ADR-0001](architecture/monorepo-layout.md) |
 | 插件运行时 | 进程外 HTTP/gRPC 优先，内置插件同进程 | [plugin-system](architecture/plugin-system.md) |

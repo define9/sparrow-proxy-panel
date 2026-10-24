@@ -53,8 +53,6 @@ src/panel/
 | `drizzle-orm` | ^0.45.4 | ORM（SQL-first，零运行时开销） |
 | `drizzle-kit` | ^0.31.11 | 迁移生成（dev） |
 | `pg` | ^8.23.1 | PostgreSQL 驱动 |
-| `ioredis` | ^5.11.1 | Redis 客户端（**不用 6.x**：Nitro 的 unstorage peer 要求 `^5.4.2`） |
-| `bullmq` | ^6.4.1 | 任务队列 |
 | `zod-openapi` | ^6.0.2 | zod → OpenAPI 3.1（契约生成） |
 
 ### 2.3 开发工具
@@ -128,15 +126,15 @@ src/panel/
 
 密码哈希：`nuxt-auth-utils` 自带 scrypt；若需要 argon2id，用 `@node-rs/argon2`（预编译二进制，无 node-gyp 依赖）。
 
-## 6. 队列
+## 6. 异步任务（不引入 MQ）
 
-**BullMQ + Redis**（与缓存同一实例，不同 prefix）。理由：
+单机单体，不需要 Kafka / RabbitMQ / BullMQ：
 
-- 支付回调后的异步动作、流量落库、邮件通知、插件同步都适合
-- 自带重试、退避、死信、并发控制
-- 相比 `pg-boss`：生态更成熟、监控工具（Bull Board）现成
+- **定时任务**：Nitro `server/tasks/`（进程内 cron），单实例无需选主
+- **耗时任务**：写 `task_runs` 表 + 轮询状态，避免长连接与长事务
+- **外部回调**：支付网关回调直接同步处理（校验 + 开通订阅通常 < 100ms）
 
-降级：Redis 不可用时，任务直接内联执行（同步），保证功能不丢。
+将来若需要多副本并行消费，再引入队列；届时任务实现收敛在 `server/tasks/` 与 `server/utils/jobs.ts`，替换成本可控。
 
 ## 7. 工具链
 
@@ -149,7 +147,6 @@ node = "24.11"
 pnpm = "12.14.0"
 go = "1.24"
 postgresql = "17"
-redis = "7"
 ```
 
 ## 8. 明确不引入的东西

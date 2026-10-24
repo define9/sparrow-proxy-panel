@@ -1,5 +1,8 @@
 # 系统架构总览
 
+> **架构前提：单机单体应用。** 不引入 Redis、Kafka 等独立中间件，不做多服务拆分。
+> 所有状态在 PostgreSQL + 进程内存里；需要扩展时，先加索引/分区，再考虑横向扩容。
+
 ## 1. 架构分层
 
 ```
@@ -9,7 +12,7 @@
 └───────────┬──────────────────────┬──────────────────────────┬─────────┘
             │ HTTPS                │ HTTPS                    │ HTTPS
 ┌───────────▼──────────────────────▼──────────────────────────▼─────────┐
-│  Panel · Nuxt 4 (Nitro)                                                │
+│  Panel · Nuxt 4 (Nitro) —— 单进程同时承载前端与 API                    │
 │                                                                       │
 │  app/  ── 用户端 / 管理端 UI（Nuxt UI v4）                             │
 │  server/                                                                │
@@ -17,21 +20,20 @@
 │    ├─ api/admin     管理端接口（session + RBAC）                       │
 │    ├─ api/agent     节点接口（HMAC 签名）        ← 独立鉴权边界         │
 │    ├─ api/plugin    插件回调入口（per-plugin token）                   │
-│    ├─ routes/       订阅输出（流式、CDN 缓存）                        │
-│    ├─ tasks/        定时任务（流量聚合 / 过期 / 同步）                 │
-│    └─ utils/        db · quota · auth · crypto · plugin-host         │
+│    ├─ routes/       订阅输出（流式）                                  │
+│    ├─ tasks/        定时任务（Nitro tasks，进程内）                    │
+│    └─ utils/        db · quota · auth · crypto · plugin-host          │
 │                                                                       │
 │  packages/contracts ── zod schema（唯一契约源）                       │
-└───────┬─────────────────────┬──────────────────────┬──────────────────┘
-        │ Drizzle              │ ioredis              │ BullMQ
-┌───────▼────────┐   ┌────────▼────────┐   ┌─────────▼──────────┐
-│ PostgreSQL 17  │   │   Redis 7        │   │  Queue (BullMQ)     │
-│ 业务数据        │   │ 缓存/限流/计数器  │   │ 异步任务            │
-│ 迁移/分区表     │   │ 会话/实时状态     │   │ 重试/死信           │
-└────────────────┘   └──────────────────┘   └────────────────────┘
+└───────┬──────────────────────────────────────────────────────────────┘
+        │ Drizzle（连接池）
+┌───────▼──────────────────────────────────────────────────────────────┐
+│ PostgreSQL 17 —— 唯一有状态组件                                        │
+│  业务数据 · 迁移 · 分区表 · 枚举 · 索引                                 │
+└───────────────────────────────────────────────────────────────────────┘
         ▲
         │ HTTPS（Agent 协议）
-┌───────┴──────────────────────────────────────────────────────────────┐
+┌───────┴───────────────────────────────────────────────────────────────┐
 │  Agent CLI (Go, 单静态二进制)  × N 节点                                 │
 │  ├─ 注册 / 心跳 / 拉配置 / 上报流量 / 事件                              │
 │  ├─ 内核管理：Xray / sing-box 进程守护、统计读取、配置热重载            │
@@ -55,28 +57,43 @@ Panel **不承载任何用户流量**，只下发"意图"（配额、路由、�
 Panel = 一个 Nuxt 应用（前端 SSR + Nitro API 同进程同产物），不拆前后端两个仓库/两套部署。理由：
 
 - 前后端共享 `packages/contracts` 的类型，`$fetch` 在服务端可直接调用内部 API，无需额外网关
-- 部署只需 `node .output/server/index.mjs` + Postgres + Redis
+- 部署只需 `node .output/server/index.mjs` + PostgreSQL
 - 未来如需拆分，Nitro 可独立部署（`nuxt build` 的 server 产物可单独跑），但 MVP 不需要
 
-### 2.3 写路径分层（性能核心）
+### 2.3 单机状态管理原则
 
-高频写（流量计数、心跳、在线状态）**不进 Postgres 主写路径**：
+| 状态 | 存放位置 | 理由 |
+|---|---|---|
+| 业务数据 | PostgreSQL | 唯一真相来源，事务保证 |
+| 会话 | 加密 Cookie（无状态） | 多副本也安全，单机更简单 |
+| 验证码 / 限流计数 / nonce | 进程内存（Map + TTL） | 单机足够，重启即失效（安全上更安全） |
+| 订阅渲染缓存 | 进程内存（Map + TTL 30s） | 写操作主动失效 |
+| 流量累计 | 进程内存聚合 → 定期批量 UPSERT | 避免高频小事务打 DB |
+| 异步任务 | Nitro tasks（进程内定时） | 不需要 MQ；长耗时任务用 DB 任务表 + 轮询 |
+
+**不引入 Redis / MQ 的收益**：部署只需两个组件（应用 + 数据库），没有额外的运维、备份、监控成本；单机的性能瓶颈通常在 SQL 而不在缓存。
+
+### 2.4 写路径分层（性能核心）
+
+高频写（流量计数）不直接打 DB：
 
 ```
-Agent 上报 ──► Redis 计数器 (INCRBY) ──► 定时任务批量落库 ──► traffic_daily / subscription 汇总
+Agent 上报 ──► 进程内存累加（按 uid 聚合，Map<uid, {up, down}>）
+            ──► 每 30s 批量 UPSERT 到 traffic_daily + subscriptions.traffic_used
+            ──► 面板进程重启时，内存计数丢失 → Agent 会重发全量增量（幂等 seq 保护）
 ```
 
 低频写（订单、用户、节点配置）直接落库。
 
-读路径：订阅输出与节点配置渲染结果进 Redis 缓存，TTL 30s + 事件失效（写操作主动 `DEL`）。
+读路径：订阅输出与节点配置渲染结果进内存缓存，TTL 30s，写操作主动清除对应 key。
 
-### 2.4 定时任务
+### 2.5 定时任务
 
-用 Nitro 的 `server/tasks/`（可配置 `cron`），无需引入独立调度器：
+用 Nitro 的 `server/tasks/`（进程内 `cron`），无需独立调度器：
 
 | 任务 | 频率 | 职责 |
 |---|---|---|
-| `traffic:flush` | 1 min | Redis 计数器 → 日汇总表 → 更新订阅已用流量 |
+| `traffic:flush` | 30s | 内存计数 → 日汇总表 → 更新订阅已用流量 |
 | `traffic:rollup` | 1 h | 小时 → 日 → 月汇总（配合分区表裁剪） |
 | `subscription:expire` | 10 min | 到期订阅下线、订单过期关闭 |
 | `node:health` | 1 min | 心跳超时判定，标记节点离线 |
@@ -84,36 +101,28 @@ Agent 上报 ──► Redis 计数器 (INCRBY) ──► 定时任务批量落�
 | `plugin:sync` | 1 h | 三方插件源拉取、校验、升级 |
 | `log:prune` | 1 d | 日志分区裁剪、过期 token 清理 |
 
-多副本部署时，任务需选主（Nitro 支持 `experimental.tasks` + DB 驱动锁；或用 Redis 分布式锁），避免重复执行。
+单实例部署无需选主。若将来要多副本，用 PostgreSQL  advisory lock（`pg_try_advisory_lock`）做选主，避免重复执行。
 
 ## 3. 部署拓扑
 
-### 3.1 单机（自托管用户最常见）
+### 3.1 单机（当前形态，目标形态）
 
 ```
-Caddy/Nginx (TLS, 静态资源缓存)
-   └── Panel (Node, 2 副本可选)
-         ├── PostgreSQL 17 (容器, 本地卷)
-         └── Redis 7 (容器)
+Caddy / Nginx（TLS、静态资源缓存）
+   └── Panel（Node 进程，PM2 / systemd / Docker）
+         └── PostgreSQL 17（同机或同内网）
 ```
 
-### 3.2 生产（中等规模）
+一个数据库、一个应用进程，两条命令即可上线。
 
-```
-CDN / WAF
-   └── LB (HTTPS, HTTP/2)
-         ├── Panel × N (容器, 无状态, 会话存 Redis)
-         ├── PostgreSQL × 2 (主从 + PITR)
-         └── Redis × 2 (主从, Sentinel)
-```
+### 3.2 扩容路径（按需触发，不预先建设）
 
-### 3.3 节点侧
-
-```
-Agent (systemd, /usr/local/bin/sparrow-agent)
-  ├── sing-box 或 Xray (子进程/同进程)
-  └── /etc/sparrow-agent/config.yaml + 本地配置缓存
-```
+| 瓶颈 | 对策 | 不改动代码的部分 |
+|---|---|---|
+| 流量写多 | `traffic_logs` 分区表 + 批量 UPSERT | 已在 schema 中预留分区字段 |
+| 列表慢 | 加索引 / keyset 分页 | Drizzle schema 可增量迁移 |
+| 面板 CPU 高 | 多副本 + 负载均衡 | 会话是 Cookie 无状态，内存缓存允许各副本独立 |
+| 多副本后限流不准 | 把内存计数换成 PG 表或 Redis | 限流实现收敛在 `server/utils/rate-limit.ts` |
 
 ## 4. 请求生命周期示例
 
@@ -121,15 +130,15 @@ Agent (systemd, /usr/local/bin/sparrow-agent)
 
 ```
 GET /api/v1/subscribe/{token}
- → 校验 token（Redis 缓存命中则直接返回渲染结果）
+ → 校验 token（内存缓存命中则直接返回渲染结果）
  → 命中缓存：返回（Cache-Control: private, max-age=60）
  → 未命中：查 subscription + 关联节点组
    → 调 subscription renderer（v2ray / clash / sing-box）
-   → 写 Redis 缓存
+   → 写内存缓存
    → 返回流式文本
 ```
 
-订阅渲染是**纯函数**：`(subscription, nodes, format) → string`，放在 `packages/contracts` 定义的接口后面，实现在 `server/utils/subscription/`，可被插件覆盖（`subscription.render` hook）。
+订阅渲染是**纯函数**：`(subscription, nodes, format) → string`，放在 `server/utils/subscription/`，可被插件覆盖（`subscription.render` hook）。
 
 ### 4.2 Agent 拉取配置
 
@@ -146,9 +155,9 @@ GET /api/v1/agent/config
 
 ```
 POST /api/v1/agent/traffic  { seq, items: [{ uid, up, down }] }
- → 验签 → 幂等检查（seq 去重）→ Redis INCRBY
+ → 验签 → 幂等检查（seq 去重）→ 累加到内存计数
  → 立即返回 202（不阻塞等待落库）
- → traffic:flush 任务统一落库
+ → traffic:flush 任务批量落库
 ```
 
 ## 5. 性能预算
@@ -156,18 +165,19 @@ POST /api/v1/agent/traffic  { seq, items: [{ uid, up, down }] }
 | 路径 | 目标 P95 | 手段 |
 |---|---|---|
 | 后台列表 API | < 200ms | 索引 + keyset 分页 + 只 SELECT 需要的列 |
-| 订阅输出 | < 80ms | Redis 缓存 + 流式响应 |
-| 商品列表 | < 100ms | SSR + 页面级缓存 + 静态化 |
-| 节点配置渲染 | < 300ms | 模板预编译 + 配置缓存 |
+| 订阅输出 | < 80ms | 内存缓存 + 流式响应 |
+| 商品列表 | < 100ms | SSR + 页面级缓存 |
+| 节点配置渲染 | < 300ms | 模板预编译 + 内存缓存 |
 | 面板首屏 LCP | < 1.5s | SSR + 关键 CSS 内联 + 图标本地化 |
-| 100 并发 Agent 心跳 | 无明显抖动 | 心跳写 Redis 不落库 |
+| 100 并发 Agent 心跳 | 无明显抖动 | 心跳 30s 一次，UPSERT 单行 |
+| 1000 节点 × 30s 心跳 | < 5% CPU | 批量 UPSERT，避免逐条事务 |
 
 ## 6. 可用性与容错
 
 | 故障 | 影响 | 应对 |
 |---|---|---|
 | Panel 宕机 | 无法下单/订阅更新 | Agent 用缓存配置继续服务；恢复后自动补偿 |
-| Postgres 宕机 | 面板不可用 | Agent 无感；面板恢复后从 Redis 补偿未落库流量 |
-| Redis 宕机 | 缓存与计数失效 | 降级直连 DB；面板可用但性能下降；计数器回退为直写 DB |
+| Postgres 宕机 | 面板不可用 | Agent 无感；面板恢复后从 Agent 增量补报流量 |
+| 面板进程重启 | 内存缓存与计数丢失 | 订阅缓存重建即可；流量由 Agent 重发增量（seq 幂等） |
 | 单节点宕机 | 部分用户受影响 | 订阅渲染时剔除离线节点；节点健康检查自动下线 |
 | Agent 与面板断连 | 无 | 本地缓存 + 指数退避重连 + 心跳超时仅标记面板侧状态 |

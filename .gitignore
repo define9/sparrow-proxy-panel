@@ -24,3 +24,6 @@ data/
 .DS_Store
 .idea/
 *.swp
+
+# 代码索引（本地生成）
+.codegraph/

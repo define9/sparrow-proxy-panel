@@ -229,7 +229,7 @@ id pk, name, type enum(generic, custom), cert text, key text (加密), issuer, n
 
 node_id pk, status enum(online, offline, degraded), cpu numeric(5,2), memory numeric(5,2), disk numeric(5,2), net_rx bigint, net_tx bigint, online_users int, agent_version, core_version, reported_at timestamptz
 
-> 该表只保留最新值（UPSERT），历史指标放 Redis 时序或 Prometheus。
+> 该表只保留最新值（UPSERT），历史指标按需保留到 `traffic_logs`，或对接 Prometheus。
 
 ### node_configs（下发配置缓存）
 
@@ -257,7 +257,7 @@ id bigserial, user_id, node_id, subscription_id, upload bigint, download bigint,
 user_id, date, upload, download, total, node_count int —— 复合主键 `(user_id, date)`
 节点维度汇总单独 `traffic_daily_node(node_id, date, user_id, upload, download)`。
 
-写入路径：Redis 计数器 → `traffic:flush`（1 分钟）批量 UPSERT 到 daily → 每日把明细归档到 `traffic_logs` 分区（可选，明细可只保留 7 天）。
+写入路径：Agent 上报 → 进程内按 uid 累加 → `traffic:flush`（30 秒）批量 UPSERT 到 daily 与 `subscriptions.traffic_used` → 每日把明细归档到 `traffic_logs` 分区（可选，明细可只保留 7 天）。
 
 ---
 

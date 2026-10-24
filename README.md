@@ -20,7 +20,9 @@ mise trust          # 信任仓库内的 mise.toml
 mise install        # node / pnpm / go
 ```
 
-PostgreSQL 17 与 Redis 7 使用本机全局安装的版本（未写进项目 `mise.toml`）。
+PostgreSQL 17 使用本机全局安装的版本（未写进项目 `mise.toml`）。
+
+> 当前是**单机单体**架构：应用 + PostgreSQL 两个组件，不需要 Redis / MQ。
 
 ## 快速开始
 

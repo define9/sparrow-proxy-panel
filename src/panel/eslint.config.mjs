@@ -4,6 +4,12 @@ import betterTailwindcss from 'eslint-plugin-better-tailwindcss'
 import { getDefaultAttributes } from 'eslint-plugin-better-tailwindcss/api/defaults'
 
 export default withNuxt(
+  {
+    rules: {
+      'vue/max-attributes-per-line': ['error', { singleline: 3 }],
+      'vue/no-unused-vars': 'error'
+    }
+  },
   betterTailwindcss.configs['correctness-error'],
   {
     settings: {

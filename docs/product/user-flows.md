@@ -29,7 +29,7 @@
 | 5. 自动登录并跳转 | — | — | — |
 
 要点：
-- 邮箱验证码存 Redis（key = `email:code:{email}`，TTL 10 分钟，带发送次数限制）
+- 邮箱验证码存进程内存（key = `email:code:{email}`，TTL 10 分钟，带发送次数限制；单机重启即失效，安全上更安全）
 - 若站点开启邀请码，验证码之后校验邀请码
 - 注册成功默认赠体验额度（可配，`settings.register_gift_traffic`）
 
@@ -89,7 +89,7 @@ POST /api/v1/auth/login { email, password }
 
 ```
 用户请求 /sub/{token}
- → 校验 token 存在（Redis 缓存）
+ → 校验 token 存在（内存缓存）
  → 检查订阅状态（expired / 超量 → 返回提示文本）
  → 取该订阅可见的节点组 → 取组内在线节点
  → 渲染为目标格式（v2ray / clash / singbox）
@@ -108,7 +108,7 @@ POST /api/v1/auth/login { email, password }
 ### 4.3 流量与配额
 
 ```
-Agent 每 30s 上报 per-user 流量 → Redis 计数器累加
+Agent 每 30s 上报 per-user 流量 → 进程内计数器累加
  → traffic:flush（1min）批量 UPSERT traffic_daily，更新 subscriptions.traffic_used
  → 用户端/管理端读取 traffic_used 与 traffic_limit 计算进度
  → 超过 traffic_limit：标记超量，节点侧拒绝新连接（通过下发规则）

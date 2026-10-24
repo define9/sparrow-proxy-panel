@@ -1,0 +1,91 @@
+{
+  "site": {
+    "name": "Sparrow Proxy Panel",
+    "description": "Self-hosted proxy service panel: plans, orders, subscriptions and nodes in one place."
+  },
+  "common": {
+    "backToHome": "Back to home",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "empty": "No data",
+    "confirm": "Confirm",
+    "loading": "Loading",
+    "actions": "Actions",
+    "status": "Status",
+    "name": "Name",
+    "email": "Email",
+    "all": "All",
+    "refresh": "Refresh"
+  },
+  "nav": {
+    "login": "Sign in",
+    "register": "Sign up",
+    "dashboard": "Overview",
+    "plans": "Plans",
+    "orders": "Orders",
+    "subscriptions": "Subscriptions",
+    "traffic": "Traffic",
+    "settings": "Settings",
+    "admin": "Admin",
+    "nodeList": "Nodes",
+    "nodeGroups": "Node groups",
+    "certificates": "Certificates",
+    "plugins": "Plugins",
+    "pluginList": "Plugin list",
+    "pluginSources": "Sources",
+    "logs": "Logs",
+    "coupons": "Coupons"
+  },
+  "auth": {
+    "subtitle": "Sign in to manage your subscriptions and nodes",
+    "loginTitle": "Sign in",
+    "registerTitle": "Sign up",
+    "email": "Email",
+    "password": "Password",
+    "login": "Sign in",
+    "register": "Sign up",
+    "remember": "Remember me",
+    "failed": "Sign-in failed, please check your email and password"
+  },
+  "action": {
+    "theme": "Toggle theme",
+    "language": "Switch language",
+    "logout": "Sign out"
+  },
+  "home": {
+    "hero": {
+      "title": "Self-hosted proxy service panel",
+      "description": "Plans, orders, subscriptions and nodes in one place. The panel and the node agent are decoupled, so nodes deploy and upgrade independently.",
+      "cta": "Get started",
+      "secondary": "Read the docs"
+    },
+    "features": {
+      "title": "Core capabilities",
+      "description": "Everything needed to run a proxy service",
+      "panel": {
+        "title": "Operations panel",
+        "description": "Plans, orders, payments, subscriptions, users and logs — all in one back office."
+      },
+      "agent": {
+        "title": "Node agent",
+        "description": "A single-binary CLI that fetches config, reports traffic, self-updates and keeps serving when the panel is down."
+      },
+      "plugin": {
+        "title": "Plugin ecosystem",
+        "description": "Payment gateways, third-party node sources and subscription renderers are pluggable — no core changes needed."
+      },
+      "i18n": {
+        "title": "Internationalization",
+        "description": "UI, subscriptions and notifications are localized; Simplified Chinese and English out of the box."
+      }
+    }
+  },
+  "dashboard": {
+    "comingSoon": "Under construction",
+    "comingSoonDesc": "This module is a skeleton placeholder for now."
+  }
+}

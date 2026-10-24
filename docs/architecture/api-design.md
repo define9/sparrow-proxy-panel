@@ -104,7 +104,7 @@ METHOD \n PATH \n TIMESTAMP \n NONCE \n SHA256(body)
 
 校验规则：
 1. `timestamp` 与服务器时间偏差 ≤ 5 分钟
-2. `nonce` 在 10 分钟内未出现（Redis `SET NX`）
+2. `nonce` 在 10 分钟内未出现（进程内存 Map + TTL；单机场景足够）
 3. HMAC 常量时间比较（`hmac.Equal`）
 4. `secret` 每节点独立，轮换时支持双密钥过渡期（旧密钥 24h 内有效）
 
@@ -339,7 +339,8 @@ Base：`/api/v1/agent`，全部需要 HMAC 签名。
 | Agent 配置拉取 | 30 次 / 分钟 / node_id |
 | 通用 API | 用户 600 次 / 分钟；管理端 1200 次 / 分钟 |
 
-实现：Redis 滑动窗口（`ZSET` + Lua 原子脚本），`server/middleware/rate-limit.ts`。
+实现：进程内滑动窗口计数（Map + 定期清理），`server/middleware/rate-limit.ts`。
+单机单实例下无需分布式限流；多副本场景再替换为 PG 表或 Redis 实现（实现收敛在单个文件内）。
 
 ## 8. 版本与兼容
 
