@@ -88,7 +88,7 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 /** 从源码里抽出所有 `t('key')` / `t("key")` 形式的字面量 key */
 function extractUsedKeys(): Map<string, string[]> {
   const used = new Map<string, string[]>()
-  const pattern = /\b(?:\$?t)\(\s*['"]([\w.\-]+)['"]/g
+  const pattern = /\b(?:\$?t)\(\s*['"]([\w.-]+)['"]/g
 
   for (const file of walk(APP_DIR, '.vue').concat(walk(APP_DIR, '.ts'))) {
     const source = readFileSync(file, 'utf8')
