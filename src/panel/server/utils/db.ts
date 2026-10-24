@@ -16,16 +16,21 @@ let _pool: pg.Pool | undefined
 export function useDb(): Database {
   if (!_db) {
     const config = useRuntimeConfig()
-    if (!config.databaseUrl) {
+    // 兼容两种配置来源：
+    // - NUXT_DATABASE_URL：Nitro 运行时约定（容器部署用这个）
+    // - DATABASE_URL：本地开发 / drizzle-kit 通用（.env 里只写一个也行）
+    const connectionString = config.databaseUrl || process.env.DATABASE_URL
+
+    if (!connectionString) {
       throw createError({
         statusCode: 500,
         statusMessage: 'DATABASE_URL_MISSING',
-        message: '数据库未配置：请设置 NUXT_DATABASE_URL 环境变量'
+        message: '数据库未配置：请在 src/panel/.env 设置 DATABASE_URL（或 NUXT_DATABASE_URL）'
       })
     }
 
     _pool = new pg.Pool({
-      connectionString: config.databaseUrl,
+      connectionString,
       max: Number(config.dbPoolMax ?? 10),
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000

@@ -67,6 +67,11 @@ export default defineNuxtConfig({
       cookieKey: 'sparrow_locale',
       redirectOn: 'root',
       alwaysRedirect: false
+    },
+    experimental: {
+      // 必须开启：把 locale 消息随 SSR payload 下发到客户端。
+      // 否则客户端没有 messages，hydration 后页面会显示裸 key（nav.login 这类）
+      preload: true
     }
   }
 })
