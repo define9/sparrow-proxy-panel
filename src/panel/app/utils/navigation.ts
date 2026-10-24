@@ -1,5 +1,6 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 import { PERMISSIONS } from '@sparrow/contracts/permissions'
+import { pluginNavGroup } from '~/utils/nav/plugins'
 
 /**
  * 菜单模型。
@@ -49,15 +50,7 @@ export const adminNav: NavEntry[] = [
     ]
   },
   { labelKey: 'nav.users', icon: 'i-lucide-users', to: '/admin/users', permission: PERMISSIONS.ADMIN_USER_READ },
-  {
-    labelKey: 'nav.plugins',
-    icon: 'i-lucide-plug',
-    permission: PERMISSIONS.ADMIN_PLUGIN_READ,
-    children: [
-      { labelKey: 'nav.pluginList', icon: 'i-lucide-list', to: '/admin/plugins' },
-      { labelKey: 'nav.pluginSources', icon: 'i-lucide-cloud-download', to: '/admin/plugin-sources' }
-    ]
-  },
+  pluginNavGroup,
   { labelKey: 'nav.logs', icon: 'i-lucide-scroll-text', to: '/admin/logs', permission: PERMISSIONS.ADMIN_LOG_READ },
   { labelKey: 'nav.coupons', icon: 'i-lucide-ticket-percent', to: '/admin/coupons', permission: PERMISSIONS.ADMIN_COUPON_READ },
   { labelKey: 'nav.settings', icon: 'i-lucide-settings', to: '/admin/settings', permission: PERMISSIONS.ADMIN_SETTINGS_READ }
