@@ -81,7 +81,7 @@ async function confirmCancel() {
           </template>
           <template #right>
             <UButton
-              icon="i-lucide-refresh"
+              icon="i-lucide-refresh-cw"
               :label="t('common.refresh')"
               color="neutral"
               variant="ghost"
