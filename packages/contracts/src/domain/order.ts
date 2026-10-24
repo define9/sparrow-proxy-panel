@@ -14,11 +14,14 @@ export const OrderSchema = z.object({
   discount: MoneySchema,
   currency: CurrencySchema,
   status: OrderStatusSchema,
+  /** 下单用户邮箱（管理端列表直接展示，避免二次关联查询） */
+  userEmail: z.email().nullish(),
   paymentMethod: z.string().nullish(),
   tradeNo: z.string().nullish(),
   expiresAt: DateTimeSchema.nullish(),
   paidAt: DateTimeSchema.nullish(),
-  createdAt: DateTimeSchema
+  createdAt: DateTimeSchema,
+  updatedAt: DateTimeSchema
 })
 export type Order = z.infer<typeof OrderSchema>
 

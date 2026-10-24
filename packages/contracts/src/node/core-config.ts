@@ -23,6 +23,9 @@ export const CoreUserRuleSchema = z.object({
   uploadSpeed: z.number().int().nonnegative(),
   /** 设备/并发连接数上限，0 = 不限 */
   deviceLimit: z.number().int().nonnegative().default(0),
+  /** 该用户的独立凭据（uuid 协议用 uuid，trojan/ss 用 password） */
+  uuid: z.string().optional(),
+  password: z.string().optional(),
   /** 是否放行（false 表示被配额/封禁拒绝） */
   enabled: z.boolean().default(true)
 })

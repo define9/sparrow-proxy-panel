@@ -81,23 +81,27 @@ func NewTrafficReport(seq int64, items []TrafficItem) AgentTrafficReport {
 // config 是内核配置本体（JSON 对象），内部会被合并进契约里的 config 字段。
 func NewConfigResponse(version int64, coreType string, config map[string]any, users []ConfigUserRule, certs []ConfigCertificate, reload bool) (AgentConfigResponse, error) {
 	convertedUsers := make([]struct {
-		DeviceLimit   int64  `json:"deviceLimit"`
-		DownloadSpeed int64  `json:"downloadSpeed"`
-		Email         string `json:"email"`
-		Enabled       bool   `json:"enabled"`
-		Limit         int64  `json:"limit"`
-		Uid           int64  `json:"uid"`
-		UploadSpeed   int64  `json:"uploadSpeed"`
+		DeviceLimit   int64   `json:"deviceLimit"`
+		DownloadSpeed int64   `json:"downloadSpeed"`
+		Email         string  `json:"email"`
+		Enabled       bool    `json:"enabled"`
+		Limit         int64   `json:"limit"`
+		Password      *string `json:"password,omitempty"`
+		Uid           int64   `json:"uid"`
+		UploadSpeed   int64   `json:"uploadSpeed"`
+		Uuid          *string `json:"uuid,omitempty"`
 	}, 0, len(users))
 	for _, u := range users {
 		convertedUsers = append(convertedUsers, struct {
-			DeviceLimit   int64  `json:"deviceLimit"`
-			DownloadSpeed int64  `json:"downloadSpeed"`
-			Email         string `json:"email"`
-			Enabled       bool   `json:"enabled"`
-			Limit         int64  `json:"limit"`
-			Uid           int64  `json:"uid"`
-			UploadSpeed   int64  `json:"uploadSpeed"`
+			DeviceLimit   int64   `json:"deviceLimit"`
+			DownloadSpeed int64   `json:"downloadSpeed"`
+			Email         string  `json:"email"`
+			Enabled       bool    `json:"enabled"`
+			Limit         int64   `json:"limit"`
+			Password      *string `json:"password,omitempty"`
+			Uid           int64   `json:"uid"`
+			UploadSpeed   int64   `json:"uploadSpeed"`
+			Uuid          *string `json:"uuid,omitempty"`
 		}{
 			DeviceLimit:   u.DeviceLimit,
 			DownloadSpeed: u.DownloadSpeed,

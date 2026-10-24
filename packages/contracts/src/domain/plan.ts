@@ -54,3 +54,9 @@ export const UpsertPlanSchema = z.object({
   nodeGroupIds: z.array(IdSchema).default([])
 })
 export type UpsertPlan = z.infer<typeof UpsertPlanSchema>
+
+/** 商品部分更新（管理端编辑） */
+export const PatchPlanSchema = UpsertPlanSchema.partial().extend({
+  id: IdSchema
+})
+export type PatchPlan = z.infer<typeof PatchPlanSchema>

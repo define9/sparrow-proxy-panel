@@ -3,14 +3,11 @@ import type { Order, Plan } from '@sparrow/contracts'
 /**
  * 商品与订单的前端类型。
  *
- * 与契约 `@sparrow/contracts` 对齐，额外补充两个便利字段
- * （契约里没有，需要协调者统一处理）：
- * - `OrderView.updatedAt`：列表排序与后台展示需要
- * - `OrderView.userEmail`：管理端按用户筛选时直接展示
+ * 与契约 `@sparrow/contracts` 对齐；
+ * `updatedAt` / `userEmail` 已由协调者补入契约（`OrderSchema`）。
  */
 export interface OrderView extends Order {
-  updatedAt: string
-  userEmail: string | null
+  userEmail?: string | null
 }
 
 /** 下单响应：附带幂等标记 */
