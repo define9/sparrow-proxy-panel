@@ -85,8 +85,18 @@
 | 布局与导航 | ✅ 4 布局 / 权限驱动菜单 | `app/layouts/`、`app/utils/navigation.ts` |
 | 主题 / 明暗模式 / 中英文 | ✅ | `app/app.config.ts`、`i18n/` |
 | CI（lint / typecheck / 契约漂移 / 迁移漂移 / 构建） | ✅ | `.github/workflows/ci.yml` |
-| Agent CLI | 骨架 | `src/agent/` |
-| 商品 / 订单 / 订阅 / 节点 / 插件 | 待实现 | 见 [roadmap](roadmap.md) |
+| Agent CLI | ✅ 注册/心跳/配置/流量/命令/自更新骨架 | `src/agent/` |
+| 商品 + 订单（用户端 + 管理端） | ✅ 状态机、库存、幂等 | `server/api/v1/{user,admin}/{plans,orders}/` |
+| 订阅管理 + 多格式渲染器 | ✅ v2ray / clash / sing-box | `server/utils/subscription/` |
+| 节点管理 + 内核配置渲染 | ✅ sing-box / xray + HMAC 签名 | `server/utils/node/` |
+| 插件宿主 + 插件管理 | ✅ manifest / hook / 熔断 / 三方源(url) | `server/utils/plugin-host/` |
+| 支付回调 / 注册流程 / 2FA / 用户管理 / 日志 | 待实现 | 见 [roadmap](roadmap.md) |
 
-本地验证记录：`pnpm lint`、`pnpm typecheck`、`pnpm gen:check`、`pnpm db:check`、`pnpm build` 全部通过；
-迁移在 PostgreSQL 17 上实跑成功，登录链路（scrypt 校验 → 会话 Cookie → SSR 鉴权）实测通过。
+本地验证记录：`pnpm lint`、`pnpm typecheck`、`pnpm test`（109 用例）、`pnpm gen:check`、`pnpm db:check`、`pnpm build` 全部通过；
+迁移在 PostgreSQL 17 上实跑成功；21 个页面与 8 个 API 逐个冒烟通过（200），未登录访问管理端 401。
+
+P0 五个模块由 5 个并行 worker 交付（Orca 编排，各自独立 worktree + 分支，合并到 main）：
+Agent CLI / 商品订单 / 订阅渲染 / 节点管理 / 插件宿主。
+
+**跨端签名一致性**：面板端与 Agent 端使用同一组 4 个固定测试向量（canonical = `METHOD\nPATH\nTIMESTAMP\nNONCE\nSHA256(body)`），
+由独立实现（Python `hmac`）生成，两端各自断言，杜绝"自己验自己"。
