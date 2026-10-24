@@ -1,0 +1,62 @@
+{
+  "subscriptions": {
+    "title": "Subscriptions",
+    "empty": "No subscriptions",
+    "emptyDesc": "Buy a plan to generate a subscription.",
+    "unnamed": "Unnamed subscription",
+    "unlimited": "Unlimited",
+    "back": "Back to list",
+    "columns": {
+      "plan": "Plan",
+      "status": "Status",
+      "traffic": "Traffic",
+      "format": "Format",
+      "devices": "Devices",
+      "expireAt": "Expires"
+    },
+    "status": {
+      "active": "Active",
+      "paused": "Paused",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    },
+    "format": {
+      "v2ray": "V2Ray",
+      "clash": "Clash",
+      "singbox": "Sing-box"
+    },
+    "detail": {
+      "title": "Subscription details",
+      "nodes": "{count} nodes",
+      "used": "Used",
+      "total": "Total",
+      "remaining": "Remaining",
+      "deviceLimit": "Device limit",
+      "speedLimit": "Speed limit",
+      "expireAt": "Expires at",
+      "resetAt": "Next reset",
+      "links": "Subscription links",
+      "linksDesc": "Copy a link or scan the QR code to import it into a client.",
+      "copy": "Copy",
+      "qrcode": "QR code",
+      "settings": "Subscription settings",
+      "format": "Format",
+      "ipWhitelist": "IP whitelist",
+      "ipWhitelistDesc": "Only the listed IPs may use this subscription. Leave empty to allow all.",
+      "ipWhitelistPlaceholder": "Type an IP and press enter, e.g. 203.0.113.10",
+      "actions": "Traffic and devices",
+      "resetTraffic": "Reset traffic",
+      "kickDevices": "Kick devices"
+    },
+    "actions": {
+      "copySuccess": "Subscription link copied",
+      "copyFailed": "Copy failed, please copy manually",
+      "saveSuccess": "Saved",
+      "saveFailed": "Save failed",
+      "resetSuccess": "Traffic reset",
+      "resetFailed": "Reset failed",
+      "kickSuccess": "Devices kicked",
+      "kickFailed": "Operation failed"
+    }
+  }
+}

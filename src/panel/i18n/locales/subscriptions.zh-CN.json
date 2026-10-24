@@ -1,0 +1,62 @@
+{
+  "subscriptions": {
+    "title": "订阅管理",
+    "empty": "暂无订阅",
+    "emptyDesc": "购买商品后即可生成订阅。",
+    "unnamed": "未命名订阅",
+    "unlimited": "不限",
+    "back": "返回列表",
+    "columns": {
+      "plan": "商品",
+      "status": "状态",
+      "traffic": "流量",
+      "format": "格式",
+      "devices": "设备数",
+      "expireAt": "到期时间"
+    },
+    "status": {
+      "active": "生效中",
+      "paused": "已暂停",
+      "expired": "已过期",
+      "cancelled": "已取消"
+    },
+    "format": {
+      "v2ray": "V2Ray",
+      "clash": "Clash",
+      "singbox": "Sing-box"
+    },
+    "detail": {
+      "title": "订阅详情",
+      "nodes": "{count} 个节点",
+      "used": "已用",
+      "total": "总量",
+      "remaining": "剩余",
+      "deviceLimit": "设备数上限",
+      "speedLimit": "限速",
+      "expireAt": "到期时间",
+      "resetAt": "下次重置",
+      "links": "订阅链接",
+      "linksDesc": "复制链接或扫描二维码导入到客户端。",
+      "copy": "复制",
+      "qrcode": "二维码",
+      "settings": "订阅设置",
+      "format": "订阅格式",
+      "ipWhitelist": "IP 白名单",
+      "ipWhitelistDesc": "仅允许下列 IP 使用该订阅，留空表示不限制。",
+      "ipWhitelistPlaceholder": "输入 IP 后回车，例如 203.0.113.10",
+      "actions": "流量与设备",
+      "resetTraffic": "重置流量",
+      "kickDevices": "踢下线"
+    },
+    "actions": {
+      "copySuccess": "订阅链接已复制",
+      "copyFailed": "复制失败，请手动复制",
+      "saveSuccess": "已保存",
+      "saveFailed": "保存失败",
+      "resetSuccess": "流量已重置",
+      "resetFailed": "重置失败",
+      "kickSuccess": "已踢下线",
+      "kickFailed": "操作失败"
+    }
+  }
+}
