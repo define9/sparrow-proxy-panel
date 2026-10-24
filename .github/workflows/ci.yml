@@ -11,8 +11,31 @@ concurrency:
 
 jobs:
   panel:
-    name: 面板（类型 / 规范 / 契约 / 构建）
+    name: 面板（类型 / 规范 / 契约 / 构建 / i18n 冒烟）
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: sparrow
+          POSTGRES_PASSWORD: sparrow
+          POSTGRES_DB: sparrow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sparrow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://sparrow:sparrow@localhost:5432/sparrow
+      NUXT_DATABASE_URL: postgresql://sparrow:sparrow@localhost:5432/sparrow
+      NUXT_SESSION_PASSWORD: ci-session-password-at-least-32-characters
+      NUXT_MASTER_KEY: ci-master-key-32-bytes-long-abcdefgh
+      NUXT_TELEMETRY_DISABLED: 1
+
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +56,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: 单元测试
+        run: pnpm test
+
       - name: 契约漂移检测（OpenAPI）
         run: pnpm gen:check
 
@@ -43,8 +69,16 @@ jobs:
 
       - name: Build
         run: pnpm build
-        env:
-          NUXT_TELEMETRY_DISABLED: 1
+
+      - name: 数据库迁移与种子
+        run: |
+          pnpm db:migrate
+          pnpm db:seed
+
+      - name: i18n 冒烟（逐页检查裸 key）
+        run: |
+          cd src/panel
+          SMOKE_EMAIL="admin@sparrow.local" SMOKE_PASSWORD="admin12345" pnpm smoke:i18n
 
   agent:
     name: 节点 CLI（Go）

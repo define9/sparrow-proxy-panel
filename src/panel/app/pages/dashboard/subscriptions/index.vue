@@ -7,8 +7,6 @@ definePageMeta({ layout: 'dashboard' })
 const { t } = useI18n()
 const { bytes, datetime } = useFormatters()
 
-useSubscriptionI18n()
-
 const page = ref(1)
 const pageSize = 10
 

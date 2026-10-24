@@ -57,14 +57,40 @@ function flatten(obj: Record<string, unknown>, prefix = ''): Set<string> {
   return keys
 }
 
-/** 合并某个 locale 的所有分片文件（zh-CN.json + plugins.zh-CN.json + ...） */
-function mergeLocale(prefix: string): Record<string, unknown> {
-  const files = readdirSync(LOCALES_DIR)
+/**
+ * 合并某个 locale 的所有分片文件。
+ *
+ * 顺序必须与 nuxt.config.ts 里 `i18n.locales[].files` 的顺序一致，
+ * 否则测试的合并结果会和运行时不同（后者是后加载的覆盖先加载的）。
+ */
+function localeFileOrder(prefix: string): string[] {
+  const config = readFileSync(join(PANEL_ROOT, 'nuxt.config.ts'), 'utf8')
+  const block = config.match(new RegExp(`code: '${prefix}'[\\s\\S]*?files: \\[([^\\]]*)\\]`))
+  if (!block) {
+    return []
+  }
+  const names = [...block[1]!.matchAll(/'([^']+)'/g)].map(m => m[1]!)
+  const existing = names.filter(name => existsFile(join(LOCALES_DIR, name)))
+  if (existing.length > 0) {
+    return existing
+  }
+  // 回退：按后缀匹配
+  return readdirSync(LOCALES_DIR)
     .filter(name => name === `${prefix}.json` || name.endsWith(`.${prefix}.json`))
     .sort()
+}
 
+function existsFile(file: string): boolean {
+  try {
+    return statSync(file).isFile()
+  } catch {
+    return false
+  }
+}
+
+function mergeLocale(prefix: string): Record<string, unknown> {
   const merged: Record<string, unknown> = {}
-  for (const name of files) {
+  for (const name of localeFileOrder(prefix)) {
     deepMerge(merged, JSON.parse(readFileSync(join(LOCALES_DIR, name), 'utf8')))
   }
   return merged

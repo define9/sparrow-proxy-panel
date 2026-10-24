@@ -9,8 +9,6 @@ const { bytes, datetime, percent } = useFormatters()
 const toast = useToast()
 const route = useRoute()
 
-useSubscriptionI18n()
-
 const id = computed(() => String(route.params.id ?? ''))
 
 const { data: subscription, refresh } = await useFetch<SubscriptionDetail>(`/api/v1/user/subscriptions/${id.value}`, {
