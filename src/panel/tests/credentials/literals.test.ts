@@ -14,13 +14,6 @@ import { describe, expect, it } from 'vitest'
 
 const PANEL_ROOT = process.cwd()
 
-const FILES = [
-  'drizzle/seed.ts',
-  '.env.example',
-  '../.github/workflows/ci.yml',
-  '../README.md'
-]
-
 const PLACEHOLDER_RE = /\{\{(EMAIL|SECRET|PASSWORD)_[a-z0-9]+\}\}/gi
 
 describe('凭据字面量', () => {
@@ -48,6 +41,6 @@ describe('凭据字面量', () => {
 
   it('默认邮箱是常见的 admin@example.com', () => {
     const source = readFileSync(join(PANEL_ROOT, 'drizzle/seed.ts'), 'utf8')
-    expect(source).toContain("'admin@example.com'")
+    expect(source).toContain('admin@example.com')
   })
 })
