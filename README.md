@@ -92,7 +92,14 @@ pnpm dev            # http://localhost:3000
 修复：`nuxt.config.ts` 里开启 `i18n.experimental.preload = true`。
 回归防护：`tests/i18n/keys.test.ts`（静态断言 key 存在 + 中英文一致）+ `tools/smoke-i18n.mjs`（逐页扫描裸 key，已进 CI）。
 
-**2. i18n 报 `Invalid token in placeholder` → 整个 locale 文件失效 → 全站裸 key**
+**2. 样式和官方 dashboard 模板不一致（颜色发白 / 组件色缺失）**
+
+官方模板的 CSS 首行是 `@import "tailwindcss" theme(static);`，
+**少了 `theme(static)`** 时 Tailwind 4 只生成用到的色阶，Nuxt UI 依赖的
+`green-50` ~ `green-950` 语义色阶会缺失 → 组件主色/状态色渲染异常。
+改回 `theme(static)` 即可，色阶定义本身要与模板一致（`--color-green-500: #00C16A` 等）。
+
+**3. i18n 报 `Invalid token in placeholder` → 整个 locale 文件失效 → 全站裸 key**
 
 vue-i18n 的消息编译器有自己的语法：`{name}` 是插值占位符，**字面花括号必须写成 `{'{'}` / `{'}'}`**。
 比如想在文案里放一段 JSON 示例：
@@ -106,7 +113,7 @@ vue-i18n 的消息编译器有自己的语法：`{name}` 是插值占位符，**
 而现象只是 dev server 的一条 WARN，很容易被忽略。
 回归防护：`tests/i18n/compile.test.ts` 用 vue-i18n 自己的编译器逐条编译所有消息。
 
-**3. 登录报 `Password string too short (min 32 characters required)`**
+**4. 登录报 `Password string too short (min 32 characters required)`**
 
 `nuxt-auth-utils` 要求 `NUXT_SESSION_PASSWORD` **至少 32 字符**，否则所有需要会话的接口 500。
 
