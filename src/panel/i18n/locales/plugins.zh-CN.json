@@ -13,7 +13,7 @@
     "list": {
       "install": "安装插件",
       "installHint": "粘贴插件清单（manifest）JSON；面板会按契约校验清单并生成配置表单。",
-      "manifestPlaceholder": "{ \"key\": \"demo-notifier\", \"name\": \"示例插件\", \"version\": \"1.0.0\", \"type\": \"notify\" }",
+      "manifestPlaceholder": "{ '{\"key\": \"demo-notifier\", \"name\": \"示例插件\", \"version\": \"1.0.0\", \"type\": \"notify\" }' }",
       "useExample": "填入示例插件",
       "search": "搜索插件名称或 key",
       "statusAll": "全部状态",

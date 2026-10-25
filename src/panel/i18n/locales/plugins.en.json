@@ -13,7 +13,7 @@
     "list": {
       "install": "Install plugin",
       "installHint": "Paste a plugin manifest (JSON). The panel validates it against the contract and generates the configuration form automatically.",
-      "manifestPlaceholder": "{ \"key\": \"demo-notifier\", \"name\": \"Demo plugin\", \"version\": \"1.0.0\", \"type\": \"notify\" }",
+      "manifestPlaceholder": "{ '{\"key\": \"demo-notifier\", \"name\": \"Demo plugin\", \"version\": \"1.0.0\", \"type\": \"notify\" }' }",
       "useExample": "Fill example plugin",
       "search": "Search by name or key",
       "statusAll": "All statuses",

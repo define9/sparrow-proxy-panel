@@ -90,7 +90,21 @@ pnpm dev            # http://localhost:3000
 修复：`nuxt.config.ts` 里开启 `i18n.experimental.preload = true`。
 回归防护：`tests/i18n/keys.test.ts`（静态断言 key 存在 + 中英文一致）+ `tools/smoke-i18n.mjs`（逐页扫描裸 key，已进 CI）。
 
-**2. 登录报 `Password string too short (min 32 characters required)`**
+**2. i18n 报 `Invalid token in placeholder` → 整个 locale 文件失效 → 全站裸 key**
+
+vue-i18n 的消息编译器有自己的语法：`{name}` 是插值占位符，**字面花括号必须写成 `{'{'}` / `{'}'}`**。
+比如想在文案里放一段 JSON 示例：
+
+```
+✖ "{ \"key\": \"demo-notifier\" }"        → 整个 locale 文件编译失败
+✔ "{ '{\"key\": \"demo-notifier\"}' }"     → 正常
+```
+
+一旦某个文件编译失败，该 locale 的 messages 会变成**空对象**，页面全部退回裸 key，
+而现象只是 dev server 的一条 WARN，很容易被忽略。
+回归防护：`tests/i18n/compile.test.ts` 用 vue-i18n 自己的编译器逐条编译所有消息。
+
+**3. 登录报 `Password string too short (min 32 characters required)`**
 
 `nuxt-auth-utils` 要求 `NUXT_SESSION_PASSWORD` **至少 32 字符**，否则所有需要会话的接口 500。
 
