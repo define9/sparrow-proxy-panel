@@ -16,23 +16,37 @@ sparrow-proxy-panel/
 
 **只有一个：PostgreSQL 17。**（本项目是单机单体，不需要 Redis / MQ / Kafka。）
 
-```bash
-# 1) 起一个 PostgreSQL（已有就跳过）
-#    本机已装：mise ls | grep postgres
-createdb -U sparrow sparrow        # 或用 docker: docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=sparrow postgres:17
+### 一键启动数据库
 
-# 2) 配置环境变量
+```bash
+./scripts/pg.sh start     # 初始化 + 启动（数据目录 ~/Library/Application Support/sparrow-pg）
+./scripts/pg.sh status    # 查看状态与表数量
+./scripts/pg.sh stop      # 停止
+./scripts/pg.sh reset     # 清库重建
+./scripts/pg.sh psql      # 连到 sparrow 库
+```
+
+脚本会：初始化数据目录 → 启动 PG（端口 5432）→ 自动创建 `sparrow` 库。
+数据目录放在 `~/Library/Application Support/sparrow-pg`（**不在系统临时目录里，重启机器不会丢**）。
+
+> 已有 PostgreSQL 的话跳过脚本，直接改 `src/panel/.env` 的 `DATABASE_URL` 即可
+> （Docker 版：`docker run -d -p 5432:5432 -e POSTGRES_USER=sparrow -e POSTGRES_PASSWORD=sparrow -e POSTGRES_DB=sparrow postgres:17`）。
+
+### 初始化并启动面板
+
+```bash
+# 1) 配置环境变量
 cp src/panel/.env.example src/panel/.env
 #   至少改这两项：
-#     DATABASE_URL=postgresql://sparrow:<密码>@localhost:5432/sparrow
+#     DATABASE_URL=postgresql://sparrow@127.0.0.1:5432/sparrow
 #     NUXT_SESSION_PASSWORD=<至少 32 字符，session 加密密钥>
 #   生成会话密钥：node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 
-# 3) 初始化数据库
-pnpm db:migrate     # 建表（33 张表）
-pnpm db:seed        # 角色 / 权限点 / 管理员账号 / 示例商品
+# 2) 初始化数据库（33 张表 + 角色/权限/管理员/示例商品）
+pnpm db:migrate
+pnpm db:seed
 
-# 4) 启动
+# 3) 启动
 pnpm dev            # http://localhost:3000
 ```
 
