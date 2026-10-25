@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import type { OrderView } from '~/types/plan-order'
+import { ALL_FILTER, toFilterParam } from '~/utils/filters'
 
 definePageMeta({ layout: 'admin' })
 
@@ -13,7 +14,7 @@ const page = ref(1)
 const pageSize = 20
 const search = ref('')
 const keyword = ref('')
-const statusFilter = ref('')
+const statusFilter = ref(ALL_FILTER)
 const from = ref('')
 const to = ref('')
 
@@ -35,7 +36,7 @@ const { data: response, status: fetchStatus, refresh } = await useFetch('/api/v1
     page: page.value,
     pageSize,
     q: keyword.value || undefined,
-    status: statusFilter.value || undefined,
+    status: toFilterParam(statusFilter.value),
     from: from.value || undefined,
     to: to.value || undefined
   }))
@@ -44,8 +45,13 @@ const { data: response, status: fetchStatus, refresh } = await useFetch('/api/v1
 const orders = computed<OrderView[]>(() => response.value?.data ?? [])
 const total = computed(() => response.value?.meta?.total ?? 0)
 
-const statusItems = computed(() => [
-  { label: t('common.all'), value: '' },
+interface FilterOption {
+  label: string
+  value: string
+}
+
+const statusItems = computed<FilterOption[]>(() => [
+  { label: t('common.all'), value: ALL_FILTER },
   { label: t('orders.status.pending'), value: 'pending' },
   { label: t('orders.status.paid'), value: 'paid' },
   { label: t('orders.status.cancelled'), value: 'cancelled' },

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import type { OrderView } from '~/types/plan-order'
+import { ALL_FILTER, toFilterParam } from '~/utils/filters'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -9,10 +10,15 @@ const toast = useToast()
 
 const page = ref(1)
 const pageSize = 20
-const status = ref('')
+const status = ref(ALL_FILTER)
 
-const statusItems = computed(() => [
-  { label: t('common.all'), value: '' },
+interface FilterOption {
+  label: string
+  value: string
+}
+
+const statusItems = computed<FilterOption[]>(() => [
+  { label: t('common.all'), value: ALL_FILTER },
   { label: t('orders.status.pending'), value: 'pending' },
   { label: t('orders.status.paid'), value: 'paid' },
   { label: t('orders.status.cancelled'), value: 'cancelled' },
@@ -25,7 +31,7 @@ const { data: response, status: fetchStatus, refresh } = await useFetch('/api/v1
   query: computed(() => ({
     page: page.value,
     pageSize,
-    status: status.value || undefined
+    status: toFilterParam(status.value)
   }))
 })
 

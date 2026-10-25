@@ -3,6 +3,7 @@ import type { Plan, PlanStatus, PlanType } from '@sparrow/contracts'
 import { CurrencySchema, MoneySchema, PlanStatusSchema, PlanTypeSchema } from '@sparrow/contracts'
 import type { TableColumn } from '@nuxt/ui'
 import { z } from 'zod'
+import { ALL_FILTER, toFilterParam } from '~/utils/filters'
 
 definePageMeta({ layout: 'admin' })
 
@@ -15,8 +16,8 @@ const page = ref(1)
 const pageSize = 20
 const search = ref('')
 const keyword = ref('')
-const statusFilter = ref('')
-const typeFilter = ref('')
+const statusFilter = ref(ALL_FILTER)
+const typeFilter = ref(ALL_FILTER)
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -36,23 +37,36 @@ const { data: response, status: fetchStatus, refresh } = await useFetch('/api/v1
     page: page.value,
     pageSize,
     q: keyword.value || undefined,
-    status: statusFilter.value || undefined,
-    type: typeFilter.value || undefined
+    status: toFilterParam(statusFilter.value),
+    type: toFilterParam(typeFilter.value)
   }))
 })
 
 const plans = computed<Plan[]>(() => response.value?.data ?? [])
 const total = computed(() => response.value?.meta?.total ?? 0)
 
-const statusItems = computed(() => [
-  { label: t('common.all'), value: '' },
+interface FilterOption {
+  label: string
+  value: string
+}
+
+const statusItems = computed<FilterOption[]>(() => [
+  { label: t('common.all'), value: ALL_FILTER },
   { label: t('plans.status.draft'), value: 'draft' },
   { label: t('plans.status.active'), value: 'active' },
   { label: t('plans.status.inactive'), value: 'inactive' }
 ])
 
-const typeItems = computed(() => [
-  { label: t('common.all'), value: '' },
+/** 表单里只需要具体选项（不含「全部」） */
+const typeSelectItems = computed<FilterOption[]>(() =>
+  typeItems.value.filter(i => i.value !== ALL_FILTER)
+)
+const statusSelectItems = computed<FilterOption[]>(() =>
+  statusItems.value.filter(i => i.value !== ALL_FILTER)
+)
+
+const typeItems = computed<FilterOption[]>(() => [
+  { label: t('common.all'), value: ALL_FILTER },
   { label: t('plans.type.traffic'), value: 'traffic' },
   { label: t('plans.type.time'), value: 'time' },
   { label: t('plans.type.bandwidth'), value: 'bandwidth' }
@@ -462,7 +476,7 @@ async function confirmDelete() {
             <UFormField :label="t('plans.admin.form.type')" name="type" required>
               <USelect
                 v-model="state.type"
-                :items="typeItems.slice(1)"
+                :items="typeSelectItems"
                 value-key="value"
                 class="w-full"
               />
@@ -471,7 +485,7 @@ async function confirmDelete() {
             <UFormField :label="t('plans.admin.form.status')" name="status" required>
               <USelect
                 v-model="state.status"
-                :items="statusItems.slice(1)"
+                :items="statusSelectItems"
                 value-key="value"
                 class="w-full"
               />
