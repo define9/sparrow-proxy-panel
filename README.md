@@ -62,7 +62,9 @@ pnpm db:seed
 pnpm dev            # http://localhost:3000
 ```
 
-默认管理员：**`admin@example.com` / `admin12345`**（`drizzle/seed.ts` 里的默认值，**生产务必改**）。
+默认管理员：**`admin@example.com` / `sparrow-dev-2026`**（`drizzle/seed.ts` 里的默认值，**生产务必改**）。
+
+> 想换自己的账号：seed 前设 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 环境变量。
 
 > `src/panel/.env` 已加入 `.gitignore`。只写 `DATABASE_URL` 一个变量即可，drizzle-kit 与运行时共用。
 

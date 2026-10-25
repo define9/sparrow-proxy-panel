@@ -78,7 +78,7 @@ jobs:
       - name: i18n 冒烟（逐页检查裸 key）
         run: |
           cd src/panel
-          SMOKE_EMAIL="admin@sparrow.local" SMOKE_PASSWORD="admin12345" pnpm smoke:i18n
+          SMOKE_EMAIL="admin@example.com" SMOKE_PASSWORD="sparrow-dev-2026" pnpm smoke:i18n
 
   agent:
     name: 节点 CLI（Go）

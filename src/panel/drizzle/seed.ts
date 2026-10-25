@@ -5,8 +5,8 @@
  *
  * 环境变量：
  *   DATABASE_URL      必填
- *   ADMIN_EMAIL       默认 admin@sparrow.local
- *   ADMIN_PASSWORD    默认 admin12345（生产务必修改）
+ *   ADMIN_EMAIL       默认 admin@example.com
+ *   ADMIN_PASSWORD    默认 sparrow-dev-2026（生产务必修改）
  */
 import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
@@ -24,8 +24,8 @@ if (!databaseUrl) {
 const pool = new pg.Pool({ connectionString: databaseUrl })
 const db = drizzle(pool, { schema })
 
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? 'admin@sparrow.local').toLowerCase()
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'admin12345'
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? 'admin@example.com').toLowerCase()
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'sparrow-dev-2026'
 
 async function seedRoles() {
   const builtins = [
