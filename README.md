@@ -16,21 +16,33 @@ sparrow-proxy-panel/
 
 **只有一个：PostgreSQL 17。**（本项目是单机单体，不需要 Redis / MQ / Kafka。）
 
-### 一键启动数据库
+### 一键启动数据库（Docker）
 
 ```bash
-./scripts/pg.sh start     # 初始化 + 启动（数据目录 ~/Library/Application Support/sparrow-pg）
-./scripts/pg.sh status    # 查看状态与表数量
-./scripts/pg.sh stop      # 停止
-./scripts/pg.sh reset     # 清库重建
-./scripts/pg.sh psql      # 连到 sparrow 库
+./scripts/db.sh up          # 启动
+./scripts/db.sh status     # 状态
+./scripts/db.sh logs       # 日志
+./scripts/db.sh down       # 停止（保留数据）
+./scripts/db.sh reset      # 停止并删除数据卷（会清空数据）
+./scripts/db.sh psql       # 连到 sparrow 库
+./scripts/db.sh list       # 列出所有库
+./scripts/db.sh create <库名>   # 给其他服务新建库
 ```
 
-脚本会：初始化数据目录 → 启动 PG（端口 5432）→ 自动创建 `sparrow` 库。
-数据目录放在 `~/Library/Application Support/sparrow-pg`（**不在系统临时目录里，重启机器不会丢**）。
+（底层就是 `docker compose -f deploy/compose/docker-compose.dev.yml ...`，脚本只是快捷方式。）
 
-> 已有 PostgreSQL 的话跳过脚本，直接改 `src/panel/.env` 的 `DATABASE_URL` 即可
-> （Docker 版：`docker run -d -p 5432:5432 -e POSTGRES_USER=sparrow -e POSTGRES_PASSWORD=sparrow -e POSTGRES_DB=sparrow postgres:17`）。
+镜像固定 `postgres:17-alpine`，端口只绑 `127.0.0.1:5432`（不暴露到局域网），
+数据落在具名 volume `sparrow-pgdata`（`down` 不会删，`down -v` 才删）。
+
+**一个容器承载多个库**：`deploy/initdb/01-create-databases.sh` 在首次启动时建库，
+其他服务要库就往那脚本里加一段 `create_db xxx`（首次启动才执行；已存在的 volume 不会重跑，
+需要重建时 `down -v` 后再来一次）。当前已有：
+
+| 库 | 用途 |
+|---|---|
+| `sparrow` | 面板主库 |
+
+> 用自己的 PostgreSQL 也行：改 `src/panel/.env` 的 `DATABASE_URL` 即可。
 
 ### 初始化并启动面板
 
@@ -38,7 +50,7 @@ sparrow-proxy-panel/
 # 1) 配置环境变量
 cp src/panel/.env.example src/panel/.env
 #   至少改这两项：
-#     DATABASE_URL=postgresql://sparrow@127.0.0.1:5432/sparrow
+#     DATABASE_URL=postgresql://sparrow:dev@127.0.0.1:5432/sparrow
 #     NUXT_SESSION_PASSWORD=<至少 32 字符，session 加密密钥>
 #   生成会话密钥：node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 
