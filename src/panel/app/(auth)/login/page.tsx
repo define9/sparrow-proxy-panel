@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -21,14 +22,33 @@ const loginSchema = z.object({
 type LoginValues = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
+  const router = useRouter()
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '', remember: true }
   })
   const { errors, isSubmitting } = form.formState
 
-  function onSubmit() {
-    toast.info('演示环境：登录接口未接入')
+  async function onSubmit(values: LoginValues) {
+    const response = await fetch('/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: values.email, password: values.password })
+    })
+    const payload = await response.json().catch(() => null)
+
+    if (!response.ok) {
+      toast.error(payload?.message ?? '登录失败，请稍后再试')
+      if (payload?.data?.field === 'email') form.setError('email', { message: payload.message })
+      if (payload?.data?.field === 'password') form.setError('password', { message: payload.message })
+      return
+    }
+
+    toast.success(`欢迎回来，${payload.user.username}`)
+    const next = new URLSearchParams(window.location.search).get('next')
+    const isAdmin = (payload.permissions ?? []).some((p: string) => p.startsWith('admin:') || p === '*')
+    router.push(next || (isAdmin ? '/admin' : '/dashboard'))
+    router.refresh()
   }
 
   return (
@@ -111,7 +131,9 @@ export default function LoginPage() {
         </Link>
       </p>
 
-      <p className="text-center text-xs text-muted-foreground">演示环境不会发出真实请求</p>
+      <p className="text-center text-xs text-muted-foreground">
+        演示账号 admin@example.com / admin123456
+      </p>
     </div>
   )
 }

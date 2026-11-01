@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { useTheme } from 'next-themes'
 import { Check, ChevronsUpDown, Globe, LayoutDashboard, LogOut, Monitor, Moon, Settings, Sun } from 'lucide-react'
-import { toast } from 'sonner'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -22,12 +21,24 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar'
 import { localeNames, locales, type Locale } from '@/i18n/config'
+import type { SessionUser } from '@/lib/auth/types'
 
 function writeLocaleCookie(next: string) {
   document.cookie = `NEXT_LOCALE=${next}; path=/; max-age=31536000; samesite=lax`
 }
 
-export function NavUser() {
+export function NavUser({ user }: { user: SessionUser }) {
+  const initials = user.username.slice(0, 2).toUpperCase()
+  const isAdmin = user.role !== 'user'
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  async function logout() {
+    setLoggingOut(true)
+    await fetch('/api/v1/auth/logout', { method: 'POST' })
+    router.push('/login')
+    router.refresh()
+  }
+
   const t = useTranslations('userMenu')
   const ta = useTranslations('auth')
   const locale = useLocale() as Locale
@@ -58,11 +69,11 @@ export function NavUser() {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="size-8 rounded-lg">
-                <AvatarFallback className="rounded-lg">AD</AvatarFallback>
+                <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">admin</span>
-                <span className="truncate text-xs text-muted-foreground">admin@example.com</span>
+                <span className="truncate font-medium">{user.username}</span>
+                <span className="truncate text-xs text-muted-foreground">{user.email}</span>
               </div>
               <ChevronsUpDown className="ml-auto" />
             </SidebarMenuButton>
@@ -76,11 +87,11 @@ export function NavUser() {
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="size-8 rounded-lg">
-                  <AvatarFallback className="rounded-lg">AD</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">admin</span>
-                  <span className="truncate text-xs text-muted-foreground">admin@example.com</span>
+                  <span className="truncate font-medium">{user.username}</span>
+                  <span className="truncate text-xs text-muted-foreground">{user.email}</span>
                 </div>
               </div>
             </DropdownMenuLabel>
@@ -92,12 +103,14 @@ export function NavUser() {
                   {t('profile')}
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/admin">
-                  <LayoutDashboard />
-                  {t('admin')}
-                </Link>
-              </DropdownMenuItem>
+              {isAdmin ? (
+                <DropdownMenuItem asChild>
+                  <Link href="/admin">
+                    <LayoutDashboard />
+                    {t('admin')}
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuSub>
@@ -130,11 +143,7 @@ export function NavUser() {
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={() => {
-                toast.info('演示环境：登录态为固定管理员，无需退出')
-              }}
-            >
+            <DropdownMenuItem disabled={loggingOut} onSelect={logout}>
               <LogOut />
               {ta('logout')}
             </DropdownMenuItem>

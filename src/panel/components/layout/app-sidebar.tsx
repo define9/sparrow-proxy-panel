@@ -25,15 +25,17 @@ import {
   SidebarRail
 } from '@/components/ui/sidebar'
 import { NavUser } from '@/components/layout/nav-user'
+import type { SessionUser } from '@/lib/auth/types'
 import { adminNav, filterNav, label, userNav } from '@/lib/navigation'
 
 interface AppSidebarProps {
   navKey: 'user' | 'admin'
   permissions: string[]
   title: string
+  user: SessionUser
 }
 
-export function AppSidebar({ navKey, permissions, title }: AppSidebarProps) {
+export function AppSidebar({ navKey, permissions, title, user }: AppSidebarProps) {
   const pathname = usePathname()
   const locale = useLocale()
   const visible = filterNav(navKey === 'admin' ? adminNav : userNav, permissions)
@@ -111,7 +113,7 @@ export function AppSidebar({ navKey, permissions, title }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser />
+        <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
