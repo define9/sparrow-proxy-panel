@@ -4,7 +4,7 @@ import type { Order } from '@sparrow/contracts'
 import { Check, Circle, Clock } from 'lucide-react'
 import { cn } from 'cn'
 import { formatDate } from '@/lib/format'
-import { orderTimeline } from '@/lib/mock/user-data'
+import { orderTimeline } from '@/lib/billing'
 
 const TONE = {
   done: 'bg-success/12 text-success ring-success/20',
