@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { ApiClientError, apiFetch } from '@/lib/api/client'
 
 const forgotSchema = z.object({
   email: z.string().min(1, '请输入邮箱').email('邮箱格式不正确')
@@ -24,8 +25,19 @@ export default function ForgotPasswordPage() {
   })
   const { errors, isSubmitting } = form.formState
 
-  function onSubmit() {
-    toast.info('演示环境：找回密码接口未接入')
+  async function onSubmit(values: ForgotValues) {
+    try {
+      await apiFetch('/api/v1/auth/email-code', { method: 'POST', body: { email: values.email } })
+    } catch (error) {
+      if (error instanceof ApiClientError && error.payload.data?.field === 'email') {
+        form.setError('email', { message: error.message })
+        return
+      }
+    }
+    // 重置密码流程尚未接入，不假装发送成功邮件
+    toast.info('演示环境不支持重置', {
+      description: '请联系管理员在后台为你重置密码。'
+    })
   }
 
   return (

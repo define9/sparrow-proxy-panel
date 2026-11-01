@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -12,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { ApiClientError, apiFetch } from '@/lib/api/client'
 
 const registerSchema = z
   .object({
@@ -33,6 +35,7 @@ const registerSchema = z
 type RegisterValues = z.infer<typeof registerSchema>
 
 export default function RegisterPage() {
+  const router = useRouter()
   const [countdown, setCountdown] = useState(0)
   const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
@@ -46,19 +49,68 @@ export default function RegisterPage() {
     return () => clearTimeout(timer)
   }, [countdown])
 
-  function handleSendCode() {
+  async function handleSendCode() {
     const email = form.getValues('email')
     if (!z.string().email().safeParse(email).success) {
       form.setError('email', { message: '请先填写正确的邮箱' })
       return
     }
     form.clearErrors('email')
-    setCountdown(60)
-    toast.success('验证码已发送', { description: '演示环境：任意 6 位数字均可通过' })
+
+    try {
+      const result = await apiFetch<{ sent: boolean; expiresIn: number; devCode?: string }>(
+        '/api/v1/auth/email-code',
+        { method: 'POST', body: { email } }
+      )
+      setCountdown(60)
+
+      if (result.devCode) {
+        // 演示环境：接口直接返回验证码，自动填入
+        form.setValue('code', result.devCode, { shouldValidate: true })
+        toast.success('验证码已生成', {
+          description: `演示环境验证码 ${result.devCode}，已自动填入`
+        })
+      } else {
+        toast.success('验证码已发送', { description: '请查收邮箱，10 分钟内有效' })
+      }
+    } catch (error) {
+      toast.error('验证码发送失败', {
+        description: error instanceof ApiClientError ? error.message : '请稍后重试'
+      })
+    }
   }
 
-  function onSubmit() {
-    toast.info('演示环境：注册接口未接入')
+  async function onSubmit(values: RegisterValues) {
+    try {
+      await apiFetch('/api/v1/auth/register', {
+        method: 'POST',
+        body: {
+          email: values.email,
+          code: values.code,
+          password: values.password,
+          confirmPassword: values.confirmPassword
+        }
+      })
+      toast.success('注册成功，正在进入控制台')
+      router.push('/dashboard')
+      router.refresh()
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        const field = error.payload.data?.field
+        if (
+          field === 'email' ||
+          field === 'code' ||
+          field === 'password' ||
+          field === 'confirmPassword'
+        ) {
+          form.setError(field, { message: error.message })
+          return
+        }
+        toast.error('注册失败', { description: error.message })
+        return
+      }
+      toast.error('注册失败', { description: '请稍后重试' })
+    }
   }
 
   return (
@@ -110,7 +162,7 @@ export default function RegisterPage() {
                 <FieldError errors={[errors.code]} />
                 <FieldDescription>
                   <MailCheck className="mr-1 inline size-3.5 align-[-2px]" />
-                  验证码有效期 10 分钟，演示环境任意 6 位数字均可通过。
+                  验证码有效期 10 分钟，演示环境会直接展示并自动填入。
                 </FieldDescription>
               </Field>
 
