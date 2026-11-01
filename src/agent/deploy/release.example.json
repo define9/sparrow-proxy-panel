@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "channel": "stable",
+  "assets": {
+    "linux-amd64": "https://example.com/sparrow-agent/0.2.0/sparrow-agent-linux-amd64",
+    "linux-arm64": "https://example.com/sparrow-agent/0.2.0/sparrow-agent-linux-arm64",
+    "linux-armv7": "https://example.com/sparrow-agent/0.2.0/sparrow-agent-linux-armv7",
+    "darwin-arm64": "https://example.com/sparrow-agent/0.2.0/sparrow-agent-darwin-arm64",
+    "darwin-amd64": "https://example.com/sparrow-agent/0.2.0/sparrow-agent-darwin-amd64",
+    "windows-amd64": "https://example.com/sparrow-agent/0.2.0/sparrow-agent-windows-amd64.exe"
+  },
+  "sha256": {
+    "linux-amd64": "0000000000000000000000000000000000000000000000000000000000000000",
+    "linux-arm64": "1111111111111111111111111111111111111111111111111111111111111111",
+    "linux-armv7": "2222222222222222222222222222222222222222222222222222222222222222",
+    "darwin-arm64": "3333333333333333333333333333333333333333333333333333333333333333",
+    "darwin-amd64": "4444444444444444444444444444444444444444444444444444444444444444",
+    "windows-amd64": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "signature": "base64(ed25519(「sha256 字典的 canonical JSON」))——键按字母序、分隔符 , 与 :、无空格；生成见 scripts/release.sh"
+}

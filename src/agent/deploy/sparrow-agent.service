@@ -1,0 +1,41 @@
+[Unit]
+Description=Sparrow Proxy Agent
+Documentation=https://github.com/sparrow-proxy/sparrow-proxy-panel/blob/main/docs/architecture/agent-cli.md
+After=network-online.target
+Wants=network-online.target
+# 0 = 不做启动频率限制（节点长期离线后一次性拉起也会成功）
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sparrow-agent run -c /etc/sparrow-agent/config.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+
+# 自恢复
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillMode=mixed
+
+# 资源
+LimitNOFILE=65535
+
+# 硬化（docs/architecture/agent-cli.md §11）
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+# 只有这两个目录可写：本机缓存/流量队列 与 配置（register 要回写凭据）；
+# 日志文件单独放行（`-` 前缀表示文件不存在时忽略），install.sh 会预先创建它。
+ReadWritePaths=/var/lib/sparrow-agent /etc/sparrow-agent -/var/log/sparrow-agent.log
+# 注意：不要加 PrivateDevices=true 或 RestrictAddressFamilies 限制，
+# sing-box/xray 的 tun 模式需要 /dev/net/tun 与 AF_NETLINK。
+
+[Install]
+WantedBy=multi-user.target
