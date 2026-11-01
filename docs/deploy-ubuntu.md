@@ -172,47 +172,49 @@ curl -sI https://panel.example.com/api/v1/public/status   # 200
 | `NEXT_PUBLIC_SITE_URL` | 仍然要写 `https://你的域名`（订阅链接、回调地址都用它） |
 | 两种模式互斥 | 想切回内置 caddy：`./up.sh`（不加 `--no-caddy`）会启动 caddy 并占 80/443，记得先停掉系统里那个 |
 
-### 5.6.1 Caddy 也跑在容器里（推荐做法）
+### 5.6.1 Caddy 也跑在容器里
 
-如果统一 Caddy 本身是容器（比如 `~/docker_root/caddy`），`127.0.0.1:3000` 在它眼里是容器自己，
-必须用 **docker 网络 + 服务名**互通：
+Caddy 容器里的 `127.0.0.1` 是它自己，不是宿主机。两种接法：
 
-```bash
-# 1. 建一个共享网络（只需一次）
-docker network create web
+**A. host.docker.internal（最简单，和现有站点写法一致）**
 
-# 2. 你的 caddy compose 里加上它（示例）
-#    services:
-#      caddy:
-#        networks: [web]
-#    networks:
-#      web:
-#        external: true
+给 caddy 服务加一行 `extra_hosts`：
 
-# 3. 本项目 compose 已经内置：panel 同时接入 default 与 web
-#    （网络名可用 EDGE_NETWORK 覆盖，默认 web）
+```yaml
+services:
+  caddy:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 ```
 
-然后站点配置里写 **`reverse_proxy panel:3000`**（容器名/DNS 名），
-模板见 `deploy/caddy-site-panel.conf`：
+然后反代到宿主回环：
 
 ```caddyfile
 panel.sparrowx.org {
 	encode zstd gzip
-
 	@static path /_next/static/*
 	header @static Cache-Control "public, max-age=31536000, immutable"
-
-	reverse_proxy panel:3000 {
-		header_up X-Forwarded-For {remote_host}
+	reverse_proxy http://host.docker.internal:3000 {
 		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto {scheme}
 	}
 }
 ```
 
-> Caddyfile 语法硬性要求：`{` 必须在行尾、`}` 独占一行；`@matcher` 与指令都不能和 `{` 挤在同一行，
-> 否则会报 `Unexpected next token after '{' on same line`。
-> `import base` 这类片段也要写成 `(base) {` 独占一行，内容各自换行。
+**B. 共享 docker 网络**
+
+```bash
+docker network create web
+# caddy compose: services.caddy.networks: [web] ; networks.web.external: true
+# 本项目的 panel 也加入 web 后，反代写 http://panel:3000
+```
+
+两种都可以；模板见 `deploy/caddy-site-panel.conf`。
+
+> **Caddyfile 语法硬性要求**：`{` 必须在行尾、`}` 独占一行。
+> `log { output stdout }`、`reverse_proxy { ... }` 这种一行写法都会报
+> `Unexpected next token after '{' on same line`。
+> 另外 Caddy **没有** `reverse_proxy_headers` 这个指令，透传头要写在 `reverse_proxy` 块里的 `header_up`。
 
 **Caddy 跑在宿主机**（不是容器）时才用 `127.0.0.1:3000`。
 
