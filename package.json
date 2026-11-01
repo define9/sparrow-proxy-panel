@@ -1,0 +1,12 @@
+{
+  "name": "sparrow-proxy-panel",
+  "private": true,
+  "packageManager": "pnpm@12.6.0",
+  "scripts": {
+    "dev": "pnpm --filter panel dev",
+    "build": "pnpm --filter panel build",
+    "start": "pnpm --filter panel start",
+    "lint": "pnpm --filter panel lint",
+    "typecheck": "pnpm --filter panel typecheck"
+  }
+}

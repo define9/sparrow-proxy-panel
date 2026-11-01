@@ -1,0 +1,83 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "search": "Search",
+    "refresh": "Refresh",
+    "create": "Create",
+    "edit": "Edit",
+    "copy": "Copy",
+    "copied": "Copied",
+    "empty": "No data",
+    "loading": "Loading",
+    "all": "All",
+    "actions": "Actions",
+    "status": "Status",
+    "total": "{count} items",
+    "next": "Next",
+    "prev": "Previous",
+    "apply": "Apply",
+    "reset": "Reset",
+    "export": "Export",
+    "back": "Back",
+    "unknown": "Unknown"
+  },
+  "nav": {
+    "overview": "Overview",
+    "plans": "Plans",
+    "orders": "Orders",
+    "subscriptions": "Subscriptions",
+    "traffic": "Traffic",
+    "settings": "Settings",
+    "dashboard": "Dashboard",
+    "nodes": "Nodes",
+    "nodeList": "Nodes",
+    "nodeGroups": "Groups",
+    "certificates": "Certificates",
+    "users": "Users",
+    "plugins": "Plugins",
+    "pluginList": "Plugins",
+    "pluginSources": "Sources",
+    "logs": "Logs",
+    "coupons": "Coupons",
+    "siteSettings": "Settings"
+  },
+  "field": {
+    "email": "Email",
+    "password": "Password",
+    "passwordConfirm": "Confirm password",
+    "username": "Username",
+    "code": "Code",
+    "name": "Name",
+    "remark": "Note"
+  },
+  "auth": {
+    "login": "Sign in",
+    "register": "Sign up",
+    "logout": "Sign out",
+    "forgot": "Forgot password",
+    "loginTitle": "Sign in to console",
+    "loginSubtitle": "Continue with email and password",
+    "registerTitle": "Create account",
+    "noAccount": "No account yet?",
+    "hasAccount": "Already have an account?",
+    "remember": "Keep me signed in"
+  },
+  "userMenu": {
+    "profile": "Profile",
+    "admin": "Admin",
+    "theme": "Theme",
+    "language": "Language",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "search": {
+    "placeholder": "Search pages, orders, nodes…",
+    "pages": "Pages",
+    "actions": "Quick actions",
+    "empty": "No results"
+  }
+}

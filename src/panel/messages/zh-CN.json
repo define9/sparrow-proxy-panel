@@ -1,0 +1,83 @@
+{
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确定",
+    "delete": "删除",
+    "search": "搜索",
+    "refresh": "刷新",
+    "create": "新建",
+    "edit": "编辑",
+    "copy": "复制",
+    "copied": "已复制",
+    "empty": "暂无数据",
+    "loading": "加载中",
+    "all": "全部",
+    "actions": "操作",
+    "status": "状态",
+    "total": "共 {count} 条",
+    "next": "下一页",
+    "prev": "上一页",
+    "apply": "应用",
+    "reset": "重置",
+    "export": "导出",
+    "back": "返回",
+    "unknown": "未知"
+  },
+  "nav": {
+    "overview": "概览",
+    "plans": "商品",
+    "orders": "订单",
+    "subscriptions": "订阅",
+    "traffic": "流量",
+    "settings": "设置",
+    "dashboard": "仪表盘",
+    "nodes": "节点",
+    "nodeList": "节点列表",
+    "nodeGroups": "节点组",
+    "certificates": "证书",
+    "users": "用户",
+    "plugins": "插件",
+    "pluginList": "插件列表",
+    "pluginSources": "索引源",
+    "logs": "日志",
+    "coupons": "优惠券",
+    "siteSettings": "系统设置"
+  },
+  "field": {
+    "email": "邮箱",
+    "password": "密码",
+    "passwordConfirm": "确认密码",
+    "username": "用户名",
+    "code": "验证码",
+    "name": "名称",
+    "remark": "备注"
+  },
+  "auth": {
+    "login": "登录",
+    "register": "注册",
+    "logout": "退出登录",
+    "forgot": "忘记密码",
+    "loginTitle": "登录到控制台",
+    "loginSubtitle": "使用邮箱与密码继续",
+    "registerTitle": "创建账号",
+    "noAccount": "还没有账号？",
+    "hasAccount": "已有账号？",
+    "remember": "保持登录"
+  },
+  "userMenu": {
+    "profile": "个人设置",
+    "admin": "管理后台",
+    "theme": "主题",
+    "language": "语言",
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
+  "search": {
+    "placeholder": "搜索页面、订单、节点…",
+    "pages": "页面",
+    "actions": "快捷操作",
+    "empty": "没有匹配结果"
+  }
+}

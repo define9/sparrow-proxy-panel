@@ -1,0 +1,5 @@
+packages:
+  - "src/panel"
+  - "packages/*"
+minimumReleaseAgeExclude:
+  - lucide-react@1.66.0
