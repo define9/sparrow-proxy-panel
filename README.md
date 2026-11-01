@@ -43,7 +43,7 @@ cd ../.. && pnpm dev        # http://localhost:3000
 
 登录后管理端在 `/admin`，用户端在 `/dashboard`。
 
-## 常用脚本
+## 常用脚本与任务
 
 | 命令 | 说明 |
 |---|---|
@@ -54,6 +54,31 @@ cd ../.. && pnpm dev        # http://localhost:3000
 | `pnpm --filter panel db:generate` | 改完 schema 后生成迁移 |
 | `pnpm --filter panel db:migrate` | 应用迁移 |
 | `pnpm --filter panel db:seed` | 重置并写入演示数据（**会清空表**） |
+
+### 定时任务（`instrumentation.ts` 启动）
+
+进程内 `setInterval` 调度（无 cron 依赖），每轮执行前抢 `pg_try_advisory_lock(hashtext(name))`，
+拿不到锁直接跳过；每次执行写一条 `task_runs`（成功/失败/摘要见管理端「日志 → 任务」）。
+
+| 任务 | 间隔 | 说明 |
+|---|---|---|
+| `traffic:flush` | 30s | `traffic_logs` 增量 → `traffic_daily` / `traffic_daily_node`，并累加生效订阅的已用流量 |
+| `subscription:expire` | 10min | 到期（`expire_at < now()`）或超量（`traffic_limit > 0 && used >= limit`）的订阅置 `expired` |
+| `node:health` | 1min | `last_seen_at` 超过 90s 未更新的在线节点置 `offline` |
+
+本地调试：
+
+```bash
+# 关掉调度（只保留手动触发）
+DISABLE_JOBS=1 pnpm --filter panel start
+
+# 手动执行一次任务（需 admin:settings:write）：traffic:flush / subscription:expire / node:health
+curl -s -b cookie.txt -X POST 'localhost:3000/api/v1/admin/jobs/traffic:flush/run'
+```
+
+`traffic:flush` 用 `task_runs.meta.cursor`（上一轮窗口上界）做增量游标，
+不会把最近 5 分钟的明细重复计入；首次执行若无游标则回扫最近 5 分钟。
+
 
 ## 环境变量
 

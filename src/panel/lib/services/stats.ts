@@ -101,6 +101,49 @@ export async function getTrafficSeries(days: number): Promise<TrafficPoint[]> {
   }))
 }
 
+export interface NodeTrafficPoint {
+  nodeId: string
+  name: string
+  host: string
+  status: string
+  /** 窗口内有流量的去重用户数（≈ 在线人数） */
+  users: number
+  upload: number
+  download: number
+  total: number
+}
+
+/** 按节点汇总最近 N 天流量与活跃用户数（traffic_daily_node 为空时该节点为 0） */
+export async function getNodeTraffic(days: number): Promise<NodeTrafficPoint[]> {
+  const since = dayString(Math.max(days - 1, 0))
+  const { rows } = await db.execute(sql`
+    select
+      n.id::text as node_id,
+      n.name,
+      n.host,
+      n.status::text as status,
+      coalesce(sum(d.upload), 0) as upload,
+      coalesce(sum(d.download), 0) as download,
+      coalesce(sum(d.upload + d.download), 0) as total,
+      count(distinct d.user_id)::int as users
+    from nodes n
+    left join traffic_daily_node d on d.node_id = n.id and d.date >= ${since}
+    group by n.id, n.name, n.host, n.status
+    order by total desc, n.name asc
+  `)
+
+  return (rows as Array<Record<string, unknown>>).map((row) => ({
+    nodeId: String(row.node_id),
+    name: String(row.name),
+    host: String(row.host),
+    status: String(row.status),
+    users: toInt(row.users),
+    upload: toBytes(row.upload),
+    download: toBytes(row.download),
+    total: toBytes(row.total)
+  }))
+}
+
 /** 近 N 天实收金额，缺失日期补 0，保证折线连续 */
 export async function getRevenueSeries(days: number): Promise<RevenuePoint[]> {
   const since = dayString(Math.max(days - 1, 0))
