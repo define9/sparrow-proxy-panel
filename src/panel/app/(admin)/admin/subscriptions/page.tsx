@@ -1,22 +1,23 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
-import type { Subscription } from '@sparrow/contracts'
 import {
   CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   Gauge,
   HardDrive,
   MoreHorizontal,
   Pause,
   Play,
-  RefreshCw,
   Rss,
   Search
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { DataTable } from '@/components/common/data-table'
+import { ErrorState } from '@/components/common/error-state'
 import { PageHeader } from '@/components/common/page-header'
 import { QuotaBar } from '@/components/common/quota-bar'
 import { StateBadge } from '@/components/common/state-badge'
@@ -31,61 +32,78 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
   SubscriptionBulkDialog,
   type BulkAction
 } from '@/components/admin/subscription-bulk-dialog'
 import { SubscriptionDetailSheet } from '@/components/admin/subscription-detail-sheet'
+import {
+  useAdminSubscriptions,
+  useBatchAdminSubscriptions,
+  useUpdateAdminSubscription,
+  type AdminSubscriptionRow
+} from '@/lib/api/admin-commerce'
 import { daysLeft, formatDate } from '@/lib/format'
-import { subscriptions } from '@/lib/mock/catalog'
 
-const DAY_MS = 86_400_000
-
-function extendBy(subscription: Subscription, days: number): Subscription {
-  return {
-    ...subscription,
-    expireAt: new Date(new Date(subscription.expireAt).getTime() + days * DAY_MS).toISOString()
-  }
-}
+type StatusFilter = 'all' | AdminSubscriptionRow['status']
 
 export default function AdminSubscriptionsPage() {
-  const [rows, setRows] = useState<Subscription[]>(() =>
-    subscriptions.map((subscription) => ({ ...subscription }))
-  )
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [query, setQuery] = useState('')
-  const [detail, setDetail] = useState<Subscription | null>(null)
+  const [debounced, setDebounced] = useState('')
+  const [status, setStatus] = useState<StatusFilter>('all')
+  const [page, setPage] = useState(1)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [detail, setDetail] = useState<AdminSubscriptionRow | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [bulkAction, setBulkAction] = useState<BulkAction | null>(null)
 
-  const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase()
-    if (!keyword) return rows
-    return rows.filter(
-      (subscription) =>
-        subscription.userEmail.toLowerCase().includes(keyword) ||
-        subscription.planName.toLowerCase().includes(keyword) ||
-        subscription.id.toLowerCase().includes(keyword)
-    )
-  }, [rows, query])
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebounced(query.trim())
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
 
-  const allSelected =
-    filtered.length > 0 && filtered.every((subscription) => selectedIds.includes(subscription.id))
-  const someSelected = filtered.some((subscription) => selectedIds.includes(subscription.id))
+  const { data, isLoading, isError, refetch } = useAdminSubscriptions({
+    q: debounced,
+    status,
+    page,
+    pageSize: 20
+  })
+  const batch = useBatchAdminSubscriptions()
+  const update = useUpdateAdminSubscription()
 
-  function openDetail(subscription: Subscription) {
+  const rows = data?.data ?? []
+  const total = data?.meta.total ?? 0
+  const pageSize = data?.meta.pageSize ?? 20
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+
+  // 列表刷新后用最新数据覆盖详情快照，避免 Sheet 展示陈旧值
+  const activeDetail = detail ? (rows.find((row) => row.id === detail.id) ?? detail) : null
+
+  const allSelected = rows.length > 0 && rows.every((row) => selectedIds.includes(row.id))
+  const someSelected = rows.some((row) => selectedIds.includes(row.id))
+
+  function openDetail(subscription: AdminSubscriptionRow) {
     setDetail(subscription)
     setSheetOpen(true)
   }
 
   function toggleAll() {
     if (allSelected) {
-      const visibleIds = new Set(filtered.map((subscription) => subscription.id))
+      const visibleIds = new Set(rows.map((row) => row.id))
       setSelectedIds((prev) => prev.filter((id) => !visibleIds.has(id)))
       return
     }
-    setSelectedIds((prev) =>
-      Array.from(new Set([...prev, ...filtered.map((subscription) => subscription.id)]))
-    )
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...rows.map((row) => row.id)])))
   }
 
   function toggleOne(id: string) {
@@ -94,51 +112,45 @@ export default function AdminSubscriptionsPage() {
     )
   }
 
-  function replaceRow(next: Subscription) {
-    setRows((prev) => prev.map((row) => (row.id === next.id ? next : row)))
-    setDetail((prev) => (prev && prev.id === next.id ? next : prev))
+  function handleExtend(subscription: AdminSubscriptionRow) {
+    batch.mutate(
+      { ids: [subscription.id], action: 'extend', value: 30 },
+      {
+        onSuccess: () => toast.success(`已为 ${subscription.userEmail} 延长 30 天`),
+        onError: (error) => toast.error(error.message)
+      }
+    )
   }
 
-  function handleExtend(subscription: Subscription) {
-    replaceRow(extendBy(subscription, 30))
-  }
-
-  function handleTogglePause(subscription: Subscription) {
-    replaceRow({
-      ...subscription,
-      status: subscription.status === 'paused' ? 'active' : 'paused'
-    })
-  }
-
-  function handleResetTraffic(subscription: Subscription) {
-    replaceRow({ ...subscription, trafficUsed: 0, upload: 0, download: 0 })
-    toast.success(`已重置 ${subscription.userEmail} 的流量用量`)
+  function handleTogglePause(subscription: AdminSubscriptionRow) {
+    const next = subscription.status === 'paused' ? 'active' : 'paused'
+    update.mutate(
+      { id: subscription.id, status: next },
+      {
+        onSuccess: () => toast.success(next === 'active' ? '订阅已恢复' : '订阅已暂停'),
+        onError: (error) => toast.error(error.message)
+      }
+    )
   }
 
   function handleBulkConfirm(action: BulkAction, value: number) {
-    const selected = new Set(selectedIds)
-    setRows((prev) =>
-      prev.map((subscription) => {
-        if (!selected.has(subscription.id)) return subscription
-        if (action === 'extend') return extendBy(subscription, value)
-        if (action === 'quota') return { ...subscription, trafficLimit: value * 1024 ** 3 }
-        return { ...subscription, speedLimitMbps: value }
-      })
+    batch.mutate(
+      { ids: selectedIds, action, value },
+      {
+        onSuccess: (result) => {
+          const count = result.updated
+          if (action === 'extend') toast.success(`已为 ${count} 个订阅延长 ${value} 天`)
+          else if (action === 'quota') toast.success(`已将 ${count} 个订阅的额度调整为 ${value} GB`)
+          else toast.success(`已将 ${count} 个订阅的限速调整为 ${value === 0 ? '不限速' : `${value} Mbps`}`)
+          setSelectedIds([])
+          setBulkAction(null)
+        },
+        onError: (error) => toast.error(error.message)
+      }
     )
-    const count = selected.size
-    if (action === 'extend') toast.success(`已为 ${count} 个订阅延长 ${value} 天`)
-    else if (action === 'quota') toast.success(`已将 ${count} 个订阅的额度调整为 ${value} GB`)
-    else toast.success(`已将 ${count} 个订阅的限速调整为 ${value === 0 ? '不限速' : `${value} Mbps`}`)
-    setSelectedIds([])
-    setDetail((prev) => {
-      if (!prev || !selected.has(prev.id)) return prev
-      if (action === 'extend') return extendBy(prev, value)
-      if (action === 'quota') return { ...prev, trafficLimit: value * 1024 ** 3 }
-      return { ...prev, speedLimitMbps: value }
-    })
   }
 
-  const columns: ColumnDef<Subscription>[] = [
+  const columns: ColumnDef<AdminSubscriptionRow>[] = [
     {
       id: 'select',
       header: () => (
@@ -231,28 +243,12 @@ export default function AdminSubscriptionsPage() {
                 <Eye data-icon="inline-start" />
                 查看详情
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => {
-                  handleExtend(row.original)
-                  toast.success(`已为 ${row.original.userEmail} 延长 30 天`)
-                }}
-              >
+              <DropdownMenuItem onSelect={() => handleExtend(row.original)}>
                 <CalendarPlus data-icon="inline-start" />
                 延长 30 天
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => handleResetTraffic(row.original)}>
-                <RefreshCw data-icon="inline-start" />
-                重置流量
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  handleTogglePause(row.original)
-                  toast.success(
-                    row.original.status === 'paused' ? '订阅已恢复' : '订阅已暂停'
-                  )
-                }}
-              >
+              <DropdownMenuItem onSelect={() => handleTogglePause(row.original)}>
                 {row.original.status === 'paused' ? (
                   <Play data-icon="inline-start" />
                 ) : (
@@ -271,7 +267,7 @@ export default function AdminSubscriptionsPage() {
     <>
       <PageHeader
         title="订阅管理"
-        description={`共 ${rows.length} 个订阅，${rows.filter((row) => row.status === 'active').length} 个生效中`}
+        description={`共 ${total} 个订阅，本页 ${rows.filter((row) => row.status === 'active').length} 个生效中`}
       />
 
       {selectedIds.length > 0 ? (
@@ -300,35 +296,90 @@ export default function AdminSubscriptionsPage() {
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative w-full sm:w-auto">
-          <Search
-            data-icon="inline-start"
-            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索用户 / 套餐 / 订阅 ID"
-            aria-label="搜索订阅"
-            className="w-full pl-8 sm:w-64"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-auto">
+            <Search
+              data-icon="inline-start"
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索用户 / 套餐 / 订阅 ID"
+              aria-label="搜索订阅"
+              className="w-full pl-8 sm:w-64"
+            />
+          </div>
+          <Select
+            value={status}
+            onValueChange={(value) => {
+              setStatus(value as StatusFilter)
+              setPage(1)
+            }}
+          >
+            <SelectTrigger className="w-32" aria-label="按状态筛选">
+              <SelectValue placeholder="全部状态" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部状态</SelectItem>
+              <SelectItem value="active">生效中</SelectItem>
+              <SelectItem value="paused">已暂停</SelectItem>
+              <SelectItem value="expired">已过期</SelectItem>
+              <SelectItem value="cancelled">已取消</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Rss data-icon="inline-start" className="size-3.5" />
-          当前筛选出 {filtered.length} 个订阅，勾选后可批量操作
+          当前筛选出 {total} 个订阅，勾选后可批量操作
         </span>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        onRowClick={openDetail}
-        emptyTitle="没有匹配的订阅"
-        emptyDescription="换个关键词试试"
-      />
+      {isLoading ? (
+        <Skeleton className="h-64 w-full" />
+      ) : isError ? (
+        <ErrorState
+          title="订阅加载失败"
+          description="请检查登录状态或稍后重试。"
+          onRetry={() => void refetch()}
+        />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={rows}
+          onRowClick={openDetail}
+          emptyTitle="没有匹配的订阅"
+          emptyDescription="换个关键词或状态试试"
+        />
+      )}
+
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-muted-foreground">
+          第 {page} / {pageCount} 页，共 {total} 条
+        </span>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="上一页"
+          disabled={page <= 1}
+          onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+        >
+          <ChevronLeft data-icon="inline" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="下一页"
+          disabled={page >= pageCount}
+          onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}
+        >
+          <ChevronRight data-icon="inline" />
+        </Button>
+      </div>
 
       <SubscriptionDetailSheet
-        subscription={detail}
+        key={activeDetail?.id ?? 'none'}
+        subscription={activeDetail}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         onExtend={handleExtend}

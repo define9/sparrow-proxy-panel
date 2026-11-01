@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import type { Plan } from '@sparrow/contracts'
 import { Package, Search } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
@@ -13,65 +14,76 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { DataTable } from '@/components/common/data-table'
+import { ErrorState } from '@/components/common/error-state'
 import { PageHeader } from '@/components/common/page-header'
 import { StateBadge } from '@/components/common/state-badge'
 import { CreatePlanDialog } from '@/components/admin/create-plan-dialog'
 import { PlanRowActions } from '@/components/admin/plan-row-actions'
+import {
+  useAdminPlans,
+  useDeleteAdminPlan,
+  useDuplicateAdminPlan,
+  useUpdateAdminPlan
+} from '@/lib/api/admin-commerce'
+import { planTypeLabels } from '@/lib/admin-labels'
 import { formatMoney } from '@/lib/format'
-import { plans } from '@/lib/mock/catalog'
-import { planTypeLabels } from '@/lib/mock/admin-catalog'
 
 type StatusFilter = 'all' | Plan['status']
 
 export default function AdminPlansPage() {
-  const [rows, setRows] = useState<Plan[]>(() => plans.map((plan) => ({ ...plan })))
   const [query, setQuery] = useState('')
+  const [debounced, setDebounced] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
+  const [editing, setEditing] = useState<Plan | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
 
-  const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase()
-    return rows.filter((plan) => {
-      if (status !== 'all' && plan.status !== status) return false
-      if (!keyword) return true
-      return (
-        plan.name.toLowerCase().includes(keyword) || plan.slug.toLowerCase().includes(keyword)
-      )
-    })
-  }, [rows, query, status])
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [query])
 
-  const activeCount = rows.filter((plan) => plan.status === 'active').length
+  const { data: rows = [], isLoading, isError, refetch } = useAdminPlans({
+    q: debounced,
+    status
+  })
 
-  function handleCreated(plan: Plan) {
-    setRows((prev) => [plan, ...prev])
+  const duplicate = useDuplicateAdminPlan()
+  const update = useUpdateAdminPlan()
+  const remove = useDeleteAdminPlan()
+
+  const activeCount = useMemo(() => rows.filter((plan) => plan.status === 'active').length, [rows])
+
+  function handleEdit(plan: Plan) {
+    setEditing(plan)
+    setEditOpen(true)
   }
 
   function handleDuplicate(plan: Plan) {
-    setRows((prev) => [
-      ...prev,
-      {
-        ...plan,
-        id: `${plan.id}_copy_${Date.now()}`,
-        name: `${plan.name} 副本`,
-        slug: `${plan.slug}-copy`,
-        status: 'draft',
-        soldCount: 0
-      }
-    ])
+    duplicate.mutate(plan.id, {
+      onSuccess: (copy) => toast.success(`已复制「${plan.name}」为「${copy.name}」`),
+      onError: (error) => toast.error(error.message)
+    })
   }
 
   function handleToggleStatus(plan: Plan) {
-    setRows((prev) =>
-      prev.map((row) =>
-        row.id === plan.id
-          ? { ...row, status: row.status === 'active' ? 'inactive' : 'active' }
-          : row
-      )
+    const next = plan.status === 'active' ? 'inactive' : 'active'
+    update.mutate(
+      { id: plan.id, status: next },
+      {
+        onSuccess: () => toast.success(next === 'active' ? `「${plan.name}」已上架` : `「${plan.name}」已下架`),
+        onError: (error) => toast.error(error.message)
+      }
     )
   }
 
   function handleDelete(plan: Plan) {
-    setRows((prev) => prev.filter((row) => row.id !== plan.id))
+    if (!window.confirm(`确认删除商品「${plan.name}」？已产生订单的商品无法删除。`)) return
+    remove.mutate(plan.id, {
+      onSuccess: () => toast.success(`已删除「${plan.name}」`),
+      onError: (error) => toast.error(error.message)
+    })
   }
 
   const columns: ColumnDef<Plan>[] = [
@@ -143,6 +155,7 @@ export default function AdminPlansPage() {
         <div className="flex justify-end">
           <PlanRowActions
             plan={row.original}
+            onEdit={handleEdit}
             onDuplicate={handleDuplicate}
             onToggleStatus={handleToggleStatus}
             onDelete={handleDelete}
@@ -157,7 +170,7 @@ export default function AdminPlansPage() {
       <PageHeader
         title="商品管理"
         description={`共 ${rows.length} 个商品，其中 ${activeCount} 个在售`}
-        actions={<CreatePlanDialog onCreated={handleCreated} />}
+        actions={<CreatePlanDialog />}
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -189,16 +202,38 @@ export default function AdminPlansPage() {
         </div>
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Package data-icon="inline-start" className="size-3.5" />
-          当前筛选出 {filtered.length} 个商品
+          当前筛选出 {rows.length} 个商品
         </span>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        emptyTitle="没有匹配的商品"
-        emptyDescription="换个关键词或状态试试，也可以直接新建商品"
-      />
+      {isLoading ? (
+        <Skeleton className="h-64 w-full" />
+      ) : isError ? (
+        <ErrorState
+          title="商品加载失败"
+          description="请检查登录状态或稍后重试。"
+          onRetry={() => void refetch()}
+        />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={rows}
+          emptyTitle="没有匹配的商品"
+          emptyDescription="换个关键词或状态试试，也可以直接新建商品"
+        />
+      )}
+
+      {editing ? (
+        <CreatePlanDialog
+          key={editing.id}
+          plan={editing}
+          open={editOpen}
+          onOpenChange={(open) => {
+            setEditOpen(open)
+            if (!open) setEditing(null)
+          }}
+        />
+      ) : null}
     </>
   )
 }
