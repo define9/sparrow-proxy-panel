@@ -1,26 +1,29 @@
-# Caddy 反代示例：自动申请并续期 Let's Encrypt 证书
-# 用法：caddy run --config /etc/caddy/Caddyfile
+# 由环境变量驱动：SITE_DOMAIN / ACME_EMAIL（见 deploy/.env）
+# SITE_DOMAIN=panel.example.com → 自动申请证书走 HTTPS
+# SITE_DOMAIN=:80               → 纯 HTTP（无域名/内网测试用）
 
-panel.example.com {
+{
+	email {$ACME_EMAIL}
+}
+
+{$SITE_DOMAIN} {
 	encode zstd gzip
 
-	# 静态资源长缓存（Next 产物带 hash）
+	# Next 产物带 hash，可长缓存
 	@static path /_next/static/*
 	header @static Cache-Control "public, max-age=31536000, immutable"
 
-	# 订阅输出不要缓存到 CDN（面板自己带 Cache-Control: private）
+	# 订阅输出由面板自己控制缓存
 	@sub path /sub/*
 	header @sub Cache-Control "private, max-age=60"
 
-	reverse_proxy 127.0.0.1:3000 {
+	reverse_proxy panel:3000 {
 		header_up X-Forwarded-For {remote_host}
 		header_up X-Real-IP {remote_host}
 	}
 
 	log {
-		output file /var/log/caddy/panel.log {
-			roll_size 50mb
-			roll_keep 5
-		}
+		output stdout
+		format console
 	}
 }

@@ -39,8 +39,7 @@
 | # | 文档 | 内容 |
 |---|---|---|
 | 16 | [roadmap.md](roadmap.md) | P0–P3、验收标准、风险登记 |
-| 17 | [deploy.md](deploy.md) | 部署总览：Docker Compose / 裸机 systemd、升级回滚、备份 |
-| 18 | [deploy-ubuntu.md](deploy-ubuntu.md) | **从空白 Ubuntu 开始**：要装什么、防火墙、swap、Caddy、首次初始化 |
+| 17 | [deploy-ubuntu.md](deploy-ubuntu.md) | **部署手册**：一条命令起站（Docker + 容器内 Caddy）、初始化、运维、排障 |
 
 ## 已锁定的核心决策
 

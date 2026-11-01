@@ -7,13 +7,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-sparrow}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 deploy/.env 里设置 POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-sparrow}
       TZ: ${TZ:-Asia/Shanghai}
     command: ["postgres", "-c", "timezone=${TZ:-Asia/Shanghai}"]
-    ports:
-      # 只绑定本机，不暴露到公网
-      - "127.0.0.1:5432:5432"
     volumes:
       - sparrow-pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,6 +18,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    # 不映射端口：只在 compose 内网可达（需要外部调试时临时加 127.0.0.1:5432:5432）
 
   # 一次性迁移任务：成功退出后 panel 才启动
   migrate:
@@ -29,7 +27,7 @@ services:
       dockerfile: src/panel/Dockerfile
       target: migrator
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-sparrow}:${POSTGRES_PASSWORD:-dev}@postgres:5432/${POSTGRES_DB:-sparrow}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sparrow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sparrow}
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,14 +42,10 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-sparrow}:${POSTGRES_PASSWORD:-dev}@postgres:5432/${POSTGRES_DB:-sparrow}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sparrow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sparrow}
       MASTER_KEY: ${MASTER_KEY:?请在 deploy/.env 里设置 MASTER_KEY}
-      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
-      # 公网部署时建议设置，初始化向导要求填同一个值
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?请在 deploy/.env 里设置 NEXT_PUBLIC_SITE_URL}
       SETUP_TOKEN: ${SETUP_TOKEN:-}
-    ports:
-      # 由 Caddy/Nginx 反代，这里只绑定本机
-      - "127.0.0.1:3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,6 +57,28 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 3
+    # 不映射端口：只由 caddy 反代
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: sparrow-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?请在 deploy/.env 里设置 SITE_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - sparrow-caddy-data:/data
+      - sparrow-caddy-config:/config
+    depends_on:
+      panel:
+        condition: service_started
 
 volumes:
   sparrow-pgdata:
+  sparrow-caddy-data:
+  sparrow-caddy-config:

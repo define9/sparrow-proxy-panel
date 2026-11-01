@@ -16,8 +16,14 @@ docs/               # 产品 / 架构 / 前端文档
 
 ## 生产部署
 
-- 空白 Ubuntu 服务器从零开始：[docs/deploy-ubuntu.md](docs/deploy-ubuntu.md)（装 Docker + Caddy → 三条命令起站）
-- 部署总览与运维（Docker / 裸机 systemd、备份、升级回滚）：[docs/deploy.md](docs/deploy.md)
+空白 Ubuntu 只需装 Docker，其余（数据库、应用、HTTPS 反代）都在 compose 里：
+
+```bash
+git clone git@github.com:define9/sparrow-proxy-panel.git
+sudo ./sparrow-proxy-panel/deploy/install.sh --domain panel.example.com
+```
+
+详见 [docs/deploy-ubuntu.md](docs/deploy-ubuntu.md)。
 
 ## 本地启动
 
