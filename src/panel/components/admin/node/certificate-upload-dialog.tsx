@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Upload } from 'lucide-react'
-import { toast } from 'sonner'
+import { Loader2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -22,26 +21,36 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  CERTIFICATE_TYPE_LABEL,
-  type Certificate,
-  type CertificateType
-} from '@/lib/mock/admin-nodes'
-import { iso } from '@/lib/mock/util'
+
+export type CertificateTypeValue = 'self-signed' | 'acme'
+
+export const CERTIFICATE_TYPE_LABEL: Record<CertificateTypeValue, string> = {
+  'self-signed': '自有',
+  acme: 'ACME'
+}
+
+export interface CertificateFormValues {
+  name: string
+  type: CertificateTypeValue
+  cert: string
+  key: string
+}
 
 interface CertificateUploadDialogProps {
   open: boolean
+  pending?: boolean
   onOpenChange: (open: boolean) => void
-  onUpload: (certificate: Certificate) => void
+  onSubmit: (values: CertificateFormValues) => void
 }
 
 export function CertificateUploadDialog({
   open,
+  pending = false,
   onOpenChange,
-  onUpload
+  onSubmit
 }: CertificateUploadDialogProps) {
   const [name, setName] = useState('')
-  const [type, setType] = useState<CertificateType>('self-signed')
+  const [type, setType] = useState<CertificateTypeValue>('self-signed')
   const [certPem, setCertPem] = useState('')
   const [keyPem, setKeyPem] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -65,24 +74,22 @@ export function CertificateUploadDialog({
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
-    onUpload({
-      id: `cert_new_${Date.now()}`,
+    onSubmit({
       name: name.trim(),
       type,
-      issuer: type === 'acme' ? '待 ACME 签发' : 'Sparrow Internal CA',
-      domains: [name.trim()],
-      validFrom: iso(0),
-      expiresAt: iso(type === 'acme' ? 90 : 365),
-      source: type === 'acme' ? 'acme' : 'manual',
-      autoRenew: type === 'acme'
+      cert: certPem.trim(),
+      key: keyPem.trim()
     })
-    toast.success(`证书 ${name.trim()} 已上传`)
-    reset()
-    onOpenChange(false)
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next)
+        if (!next) reset()
+      }}
+    >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>上传证书</DialogTitle>
@@ -108,13 +115,15 @@ export function CertificateUploadDialog({
                 <FieldLabel htmlFor="cert-type">类型</FieldLabel>
                 <Select
                   value={type}
-                  onValueChange={(value) => setType(value as CertificateType)}
+                  onValueChange={(value) => setType(value as CertificateTypeValue)}
                 >
                   <SelectTrigger id="cert-type" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="self-signed">{CERTIFICATE_TYPE_LABEL['self-signed']}</SelectItem>
+                    <SelectItem value="self-signed">
+                      {CERTIFICATE_TYPE_LABEL['self-signed']}
+                    </SelectItem>
                     <SelectItem value="acme">{CERTIFICATE_TYPE_LABEL.acme}</SelectItem>
                   </SelectContent>
                 </Select>
@@ -122,12 +131,12 @@ export function CertificateUploadDialog({
             </div>
 
             <Field data-invalid={Boolean(errors.cert)}>
-              <FieldLabel htmlFor="cert-pem">证书 PEM</FieldLabel>
+              <FieldLabel htmlFor="cert-pem">证书链（PEM）</FieldLabel>
               <Textarea
                 id="cert-pem"
                 value={certPem}
                 onChange={(event) => setCertPem(event.target.value)}
-                placeholder="-----BEGIN CERTIFICATE-----"
+                placeholder={'-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----'}
                 className="min-h-24 font-mono text-xs"
                 aria-invalid={Boolean(errors.cert)}
               />
@@ -135,12 +144,12 @@ export function CertificateUploadDialog({
             </Field>
 
             <Field data-invalid={Boolean(errors.key)}>
-              <FieldLabel htmlFor="cert-key">私钥 PEM</FieldLabel>
+              <FieldLabel htmlFor="cert-key">私钥（PEM）</FieldLabel>
               <Textarea
                 id="cert-key"
                 value={keyPem}
                 onChange={(event) => setKeyPem(event.target.value)}
-                placeholder="-----BEGIN PRIVATE KEY-----"
+                placeholder="粘贴私钥内容（PEM）"
                 className="min-h-24 font-mono text-xs"
                 aria-invalid={Boolean(errors.key)}
               />
@@ -152,9 +161,13 @@ export function CertificateUploadDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消
             </Button>
-            <Button type="submit">
-              <Upload data-icon="inline-start" />
-              上传
+            <Button type="submit" disabled={pending}>
+              {pending ? (
+                <Loader2 className="animate-spin" data-icon="inline-start" />
+              ) : (
+                <Upload data-icon="inline-start" />
+              )}
+              上传证书
             </Button>
           </DialogFooter>
         </form>

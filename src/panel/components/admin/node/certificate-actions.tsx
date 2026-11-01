@@ -11,11 +11,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import type { Certificate } from '@/lib/mock/admin-nodes'
+import type { AdminCertificate } from '@/lib/api/nodes'
 
 interface CertificateActionsProps {
-  certificate: Certificate
-  onDelete: (certificate: Certificate) => void
+  certificate: AdminCertificate
+  onDelete: (certificate: AdminCertificate) => void
 }
 
 export function CertificateActions({ certificate, onDelete }: CertificateActionsProps) {
@@ -30,17 +30,17 @@ export function CertificateActions({ certificate, onDelete }: CertificateActions
         <DropdownMenuLabel>{certificate.name}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onSelect={() => toast.success(`已下载 ${certificate.name} 的证书链`)}
+          onSelect={() => toast.info('证书内容只在节点下发时提供，面板不展示明文')}
         >
           <Download data-icon="inline-start" />
           下载证书
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() =>
-            toast.success(
+            toast.info(
               certificate.type === 'acme'
-                ? '已提交 ACME 续期任务，签发后自动下发'
-                : '已生成新的自签证书，请重新下发到节点'
+                ? 'ACME 续期由后续定时任务处理'
+                : '自签证书请重新上传'
             )
           }
         >

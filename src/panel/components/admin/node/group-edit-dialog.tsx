@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Save } from 'lucide-react'
-import { toast } from 'sonner'
+import { Loader2, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,66 +14,65 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import type { NodeGroupStat } from '@/lib/mock/admin-nodes'
+import type { AdminNodeGroup } from '@/lib/api/nodes'
 
-export interface NodeGroupPatch {
+export interface NodeGroupFormValues {
   name: string
   region: string
   remark: string
-  avgLatency: number
+  sort: number
 }
 
 interface GroupEditDialogProps {
-  group: NodeGroupStat | null
+  /** null 表示新建 */
+  group: AdminNodeGroup | null
+  open: boolean
+  pending?: boolean
   onOpenChange: (open: boolean) => void
-  onSave: (id: string, patch: NodeGroupPatch) => void
+  onSubmit: (id: string | null, values: NodeGroupFormValues) => void
 }
 
-export function GroupEditDialog({ group, onOpenChange, onSave }: GroupEditDialogProps) {
-  const [name, setName] = useState('')
-  const [region, setRegion] = useState('')
-  const [latency, setLatency] = useState('0')
-  const [remark, setRemark] = useState('')
+export function GroupEditDialog({
+  group,
+  open,
+  pending = false,
+  onOpenChange,
+  onSubmit
+}: GroupEditDialogProps) {
+  // 用 key 强制重挂载来重置表单，避免在 effect 里同步 setState
+  const [name, setName] = useState(() => group?.name ?? '')
+  const [region, setRegion] = useState(() => group?.region ?? '')
+  const [sort, setSort] = useState(() => String(group?.sort ?? 0))
+  const [remark, setRemark] = useState(() => group?.remark ?? '')
   const [errors, setErrors] = useState<Record<string, string>>({})
-
-  const [editingId, setEditingId] = useState(group?.id ?? null)
-  if ((group?.id ?? null) !== editingId) {
-    setEditingId(group?.id ?? null)
-    setName(group?.name ?? '')
-    setRegion(group?.region ?? '')
-    setLatency(String(group?.avgLatency ?? 0))
-    setRemark(group?.remark ?? '')
-    setErrors({})
-  }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!group) return
 
     const next: Record<string, string> = {}
-    const latencyNumber = Number(latency)
+    const sortNumber = Number(sort)
     if (!name.trim()) next.name = '请填写节点组名称'
     if (!region.trim()) next.region = '请填写所属区域'
-    if (!Number.isFinite(latencyNumber) || latencyNumber < 0) next.latency = '平均延迟需为非负数'
+    if (!Number.isInteger(sortNumber) || sortNumber < 0) next.sort = '排序需为非负整数'
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
-    onSave(group.id, {
+    onSubmit(group?.id ?? null, {
       name: name.trim(),
       region: region.trim(),
       remark: remark.trim(),
-      avgLatency: latencyNumber
+      sort: sortNumber
     })
-    toast.success(`节点组 ${name.trim()} 已更新`)
-    onOpenChange(false)
   }
 
   return (
-    <Dialog open={group !== null} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>编辑节点组</DialogTitle>
-          <DialogDescription>节点组用于聚合线路与调度策略，修改后立即生效。</DialogDescription>
+          <DialogTitle>{group ? '编辑节点组' : '新建节点组'}</DialogTitle>
+          <DialogDescription>
+            节点组用于聚合线路与调度策略，修改后立即生效。
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <FieldGroup>
@@ -101,16 +99,16 @@ export function GroupEditDialog({ group, onOpenChange, onSave }: GroupEditDialog
               </Field>
             </div>
 
-            <Field data-invalid={Boolean(errors.latency)}>
-              <FieldLabel htmlFor="group-latency">平均延迟（ms）</FieldLabel>
+            <Field data-invalid={Boolean(errors.sort)}>
+              <FieldLabel htmlFor="group-sort">排序</FieldLabel>
               <Input
-                id="group-latency"
+                id="group-sort"
                 inputMode="numeric"
-                value={latency}
-                onChange={(event) => setLatency(event.target.value)}
-                aria-invalid={Boolean(errors.latency)}
+                value={sort}
+                onChange={(event) => setSort(event.target.value)}
+                aria-invalid={Boolean(errors.sort)}
               />
-              <FieldError errors={errors.latency ? [{ message: errors.latency }] : undefined} />
+              <FieldError errors={errors.sort ? [{ message: errors.sort }] : undefined} />
             </Field>
 
             <Field>
@@ -128,8 +126,12 @@ export function GroupEditDialog({ group, onOpenChange, onSave }: GroupEditDialog
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消
             </Button>
-            <Button type="submit">
-              <Save data-icon="inline-start" />
+            <Button type="submit" disabled={pending}>
+              {pending ? (
+                <Loader2 className="animate-spin" data-icon="inline-start" />
+              ) : (
+                <Save data-icon="inline-start" />
+              )}
               保存
             </Button>
           </DialogFooter>

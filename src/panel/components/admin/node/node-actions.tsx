@@ -1,7 +1,7 @@
 'use client'
 
-import type { Node } from '@sparrow/contracts'
-import { MoreHorizontal, Pencil, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
+import { useMutation } from '@tanstack/react-query'
+import { MoreHorizontal, Pencil, RefreshCw, RotateCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,14 +12,25 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { syncNode, type AdminNode } from '@/lib/api/nodes'
 
 interface NodeActionsProps {
-  node: Node
-  onEdit: (node: Node) => void
-  onDelete: (node: Node) => void
+  node: AdminNode
+  onEdit: (node: AdminNode) => void
+  onDelete: (node: AdminNode) => void
+  onSynced?: () => void
 }
 
-export function NodeActions({ node, onEdit, onDelete }: NodeActionsProps) {
+export function NodeActions({ node, onEdit, onDelete, onSynced }: NodeActionsProps) {
+  const syncMutation = useMutation({
+    mutationFn: () => syncNode(node.id),
+    onSuccess: (result) => {
+      toast.success(`已向 ${node.name} 下发配置 v${result.configVersion}`)
+      onSynced?.()
+    },
+    onError: (error: Error) => toast.error(error.message)
+  })
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -36,15 +47,19 @@ export function NodeActions({ node, onEdit, onDelete }: NodeActionsProps) {
         <DropdownMenuLabel>{node.name}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onSelect={() => toast.success(`已向 ${node.name} 下发同步指令`)}
+          disabled={syncMutation.isPending}
+          onSelect={(event) => {
+            event.preventDefault()
+            syncMutation.mutate()
+          }}
         >
           <RefreshCw data-icon="inline-start" />
           同步配置
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => toast.success(`已重启 ${node.name} 的 ${node.core} 内核`)}
+          onSelect={() => toast.info(`重启内核需要在 Agent 侧执行（节点 ${node.name}）`)}
         >
-          <RotateCcw data-icon="inline-start" />
+          <RotateCw data-icon="inline-start" />
           重启内核
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onEdit(node)}>

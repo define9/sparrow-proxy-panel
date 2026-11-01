@@ -1,10 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import type { Node, NodeStatus } from '@sparrow/contracts'
-import { Globe2, Plus, Search, Server, Terminal, Wifi, WifiOff } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Globe2, Plus, Search, Server, Terminal, Wifi, WifiOff } from 'lucide-react'
 import { toast } from 'sonner'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Skeleton } from '@/components/ui/skeleton'
 import { CopyButton } from '@/components/common/copy-button'
 import { DataTable } from '@/components/common/data-table'
 import { PageHeader } from '@/components/common/page-header'
@@ -26,10 +27,11 @@ import { NodeActions } from '@/components/admin/node/node-actions'
 import { NodeCreateDialog } from '@/components/admin/node/node-create-dialog'
 import { NodeDetailSheet } from '@/components/admin/node/node-detail-sheet'
 import { SegmentedControl } from '@/components/admin/node/segmented-control'
+import { queryKeys } from '@/lib/api/client'
+import { fetchNodeGroups, fetchNodes, deleteNode, type AdminNode } from '@/lib/api/nodes'
 import { formatRelative } from '@/lib/format'
-import { nodeGroups, nodes as seedNodes } from '@/lib/mock/catalog'
 
-type StatusFilter = 'all' | NodeStatus
+type StatusFilter = 'all' | AdminNode['status']
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'all', label: '全部' },
@@ -38,50 +40,80 @@ const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'maintenance', label: '维护' }
 ]
 
-const TLS_LABEL: Record<Node['tlsMode'], string> = {
+const TLS_LABEL: Record<AdminNode['tlsMode'], string> = {
   none: '无',
   tls: 'TLS',
   reality: 'REALITY'
 }
 
+const PAGE_SIZE = 20
+
 const REGISTER_TEMPLATE = 'sparrow-agent register --url https://panel.example.com --token <一次性令牌>'
 
 export default function AdminNodesPage() {
-  const [nodeList, setNodeList] = useState<Node[]>(seedNodes)
+  const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
   const [groupId, setGroupId] = useState('all')
   const [status, setStatus] = useState<StatusFilter>('all')
-  const [selected, setSelected] = useState<Node | null>(null)
+  const [page, setPage] = useState(1)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
 
-  const stats = useMemo(() => {
-    const online = nodeList.filter((node) => node.status === 'online').length
-    const offline = nodeList.filter((node) => node.status === 'offline').length
-    const maintenance = nodeList.filter((node) => node.status === 'maintenance').length
-    const regions = new Set(nodeList.map((node) => node.groupId)).size
-    return { total: nodeList.length, online, offline, maintenance, regions }
-  }, [nodeList])
-
-  const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase()
-    return nodeList.filter((node) => {
-      const matchKeyword =
-        !keyword ||
-        node.name.toLowerCase().includes(keyword) ||
-        node.host.toLowerCase().includes(keyword)
-      const matchGroup = groupId === 'all' || node.groupId === groupId
-      const matchStatus = status === 'all' || node.status === status
-      return matchKeyword && matchGroup && matchStatus
-    })
-  }, [nodeList, query, groupId, status])
-
-  function handleDelete(node: Node) {
-    setNodeList((prev) => prev.filter((item) => item.id !== node.id))
-    setSelected((prev) => (prev?.id === node.id ? null : prev))
-    toast.success(`已删除节点 ${node.name}`)
+  const filters = {
+    q: query.trim() || undefined,
+    groupId: groupId === 'all' ? undefined : groupId,
+    status: status === 'all' ? undefined : status,
+    page,
+    pageSize: PAGE_SIZE
   }
 
-  const columns: ColumnDef<Node>[] = [
+  const nodesQuery = useQuery({
+    queryKey: queryKeys.nodes(filters),
+    queryFn: () => fetchNodes(filters),
+    placeholderData: keepPreviousData
+  })
+
+  const statsQuery = useQuery({
+    queryKey: ['nodes', 'stats'],
+    queryFn: () => fetchNodes({ pageSize: 100 })
+  })
+
+  const groupsQuery = useQuery({
+    queryKey: queryKeys.nodeGroups,
+    queryFn: fetchNodeGroups
+  })
+
+  const nodeList = nodesQuery.data?.data ?? []
+  const meta = nodesQuery.data?.meta
+  const groupList = groupsQuery.data?.data ?? []
+
+  const stats = useMemo(() => {
+    const all = statsQuery.data?.data ?? []
+    return {
+      total: statsQuery.data?.meta.total ?? all.length,
+      online: all.filter((node) => node.status === 'online').length,
+      offline: all.filter((node) => node.status === 'offline').length,
+      maintenance: all.filter((node) => node.status === 'maintenance').length,
+      regions: new Set(all.map((node) => node.groupId)).size
+    }
+  }, [statsQuery.data])
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteNode(id),
+    onSuccess: () => {
+      toast.success('节点已删除')
+      setSelectedId(null)
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.nodeGroups })
+    },
+    onError: (error: Error) => toast.error(error.message)
+  })
+
+  function handleDelete(node: AdminNode) {
+    deleteMutation.mutate(node.id)
+  }
+
+  const columns: ColumnDef<AdminNode>[] = [
     {
       accessorKey: 'name',
       header: '名称',
@@ -129,7 +161,7 @@ export default function AdminNodesPage() {
       accessorKey: 'rate',
       header: '倍率',
       cell: ({ row }) => (
-        <span className="font-mono text-sm tabular-nums">×{row.original.rate}</span>
+        <span className="font-mono text-sm tabular-nums">×{row.original.rate.toFixed(2)}</span>
       )
     },
     {
@@ -163,7 +195,9 @@ export default function AdminNodesPage() {
       accessorKey: 'agentVersion',
       header: 'Agent 版本',
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">v{row.original.agentVersion}</span>
+        <span className="font-mono text-xs text-muted-foreground">
+          {row.original.agentVersion ? `v${row.original.agentVersion}` : '待注册'}
+        </span>
       )
     },
     {
@@ -185,11 +219,21 @@ export default function AdminNodesPage() {
       header: '',
       cell: ({ row }) => (
         <div className="flex justify-end">
-          <NodeActions node={row.original} onEdit={setSelected} onDelete={handleDelete} />
+          <NodeActions
+            node={row.original}
+            onEdit={(node) => setSelectedId(node.id)}
+            onDelete={handleDelete}
+            onSynced={() => {
+              queryClient.invalidateQueries({ queryKey: ['nodes'] })
+            }}
+          />
         </div>
       )
     }
   ]
+
+  const hasMore = meta?.hasMore ?? false
+  const total = meta?.total ?? 0
 
   return (
     <>
@@ -245,20 +289,29 @@ export default function AdminNodesPage() {
           />
           <Input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setPage(1)
+            }}
             placeholder="搜索名称或 host"
             className="pl-8"
             aria-label="搜索节点"
           />
         </div>
 
-        <Select value={groupId} onValueChange={setGroupId}>
+        <Select
+          value={groupId}
+          onValueChange={(value) => {
+            setGroupId(value)
+            setPage(1)
+          }}
+        >
           <SelectTrigger className="w-40" aria-label="按节点组筛选">
             <SelectValue placeholder="全部节点组" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部节点组</SelectItem>
-            {nodeGroups.map((group) => (
+            {groupList.map((group) => (
               <SelectItem key={group.id} value={group.id}>
                 {group.name}
               </SelectItem>
@@ -269,33 +322,76 @@ export default function AdminNodesPage() {
         <SegmentedControl
           value={status}
           options={STATUS_OPTIONS}
-          onChange={setStatus}
+          onChange={(value) => {
+            setStatus(value)
+            setPage(1)
+          }}
           ariaLabel="按状态筛选"
         />
 
-        <span className="ml-auto text-xs text-muted-foreground">共 {filtered.length} 个节点</span>
+        <span className="ml-auto text-xs text-muted-foreground">共 {total} 个节点</span>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        onRowClick={setSelected}
-        emptyTitle="没有匹配的节点"
-        emptyDescription="调整搜索条件或节点组筛选后重试。"
-      />
+      {nodesQuery.isPending ? (
+        <div className="flex flex-col gap-2 rounded-lg border p-4">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={index} className="h-10 w-full" />
+          ))}
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={nodeList}
+          onRowClick={(node) => setSelectedId(node.id)}
+          emptyTitle="没有匹配的节点"
+          emptyDescription="调整搜索条件或节点组筛选后重试。"
+        />
+      )}
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground">
+          第 {page} 页 · 每页 {PAGE_SIZE} 条
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1 || nodesQuery.isFetching}
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+          >
+            <ChevronLeft data-icon="inline-start" />
+            上一页
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!hasMore || nodesQuery.isFetching}
+            onClick={() => setPage((prev) => prev + 1)}
+          >
+            下一页
+            <ChevronRight data-icon="inline-end" />
+          </Button>
+        </div>
+      </div>
 
       <NodeDetailSheet
-        node={selected}
-        open={selected !== null}
+        nodeId={selectedId}
+        open={selectedId !== null}
         onOpenChange={(open) => {
-          if (!open) setSelected(null)
+          if (!open) setSelectedId(null)
+        }}
+        onSynced={() => {
+          queryClient.invalidateQueries({ queryKey: ['nodes'] })
         }}
       />
 
       <NodeCreateDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreate={(node) => setNodeList((prev) => [...prev, node])}
+        onCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ['nodes'] })
+          queryClient.invalidateQueries({ queryKey: queryKeys.nodeGroups })
+        }}
       />
     </>
   )
