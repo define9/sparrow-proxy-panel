@@ -46,6 +46,21 @@ export const orderInputSchema = z.object({
   couponCode: z.string().optional()
 })
 
+export const orderListQuerySchema = z.object({
+  status: z.enum(['pending', 'paid', 'cancelled', 'expired', 'refunded']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20)
+})
+
+export const subscriptionUpdateSchema = z.object({
+  format: z.enum(['v2ray', 'clash', 'singbox']).optional(),
+  deviceLimit: z.coerce.number().int().min(1).max(999).optional()
+})
+
+export const trafficRangeSchema = z.object({
+  range: z.enum(['7d', '30d', '90d']).default('30d')
+})
+
 export const nodeInputSchema = z.object({
   name: z.string().min(1, '请填写节点名称'),
   groupId: z.string().uuid('请选择节点组'),

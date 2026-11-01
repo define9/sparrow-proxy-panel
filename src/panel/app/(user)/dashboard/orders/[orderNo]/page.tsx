@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { ArrowLeft, Receipt, RotateCcw, ShoppingCart, XCircle } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, CreditCard, Receipt, ShoppingCart, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { CopyButton } from '@/components/common/copy-button'
 import { EmptyState } from '@/components/common/empty-state'
+import { ErrorState } from '@/components/common/error-state'
 import { PageHeader } from '@/components/common/page-header'
 import { StateBadge } from '@/components/common/state-badge'
 import { InfoItem, InfoList } from '@/components/user/info-list'
@@ -22,15 +24,65 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
+import { apiFetch, ApiClientError, queryKeys } from '@/lib/api/client'
+import type { Order, PayResult } from '@/lib/api/types'
+import { orderTotal, paymentMethodLabel } from '@/lib/billing'
 import { formatDate, formatMoney } from '@/lib/format'
-import { orders } from '@/lib/mock/catalog'
-import { orderTotal, paymentMethodLabel } from '@/lib/mock/user-data'
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof ApiClientError ? error.message : fallback
+}
 
 export default function OrderDetailPage() {
   const params = useParams<{ orderNo: string }>()
-  const order = orders.find((item) => item.orderNo === params.orderNo)
+  const queryClient = useQueryClient()
 
-  if (!order) {
+  const { data: order, isPending, isError, error, refetch } = useQuery({
+    queryKey: queryKeys.order(params.orderNo),
+    queryFn: () => apiFetch<Order>(`/api/v1/user/orders/${params.orderNo}`),
+    retry: false
+  })
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.order(params.orderNo) })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.orders() })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.overview })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions() })
+  }
+
+  const pay = useMutation({
+    mutationFn: () =>
+      apiFetch<PayResult>(`/api/v1/user/orders/${params.orderNo}/pay`, { method: 'POST' }),
+    onSuccess: (result) => {
+      toast.success(result.idempotent ? '订单已支付' : '支付成功，订阅已开通')
+      invalidate()
+    },
+    onError: (mutationError) => toast.error(errorMessage(mutationError, '支付失败，请稍后重试'))
+  })
+
+  const cancel = useMutation({
+    mutationFn: () =>
+      apiFetch<Order>(`/api/v1/user/orders/${params.orderNo}/cancel`, { method: 'POST' }),
+    onSuccess: () => {
+      toast.success('订单已取消')
+      invalidate()
+    },
+    onError: (mutationError) => toast.error(errorMessage(mutationError, '取消失败，请稍后重试'))
+  })
+
+  const notFound = error instanceof ApiClientError && error.statusCode === 404
+
+  if (isPending) {
+    return (
+      <>
+        <PageHeader title="订单详情" description="正在加载订单…" />
+        <Skeleton className="h-72 rounded-xl" />
+      </>
+    )
+  }
+
+  if (notFound) {
     return (
       <EmptyState
         icon={Receipt}
@@ -43,6 +95,10 @@ export default function OrderDetailPage() {
         }
       />
     )
+  }
+
+  if (isError || !order) {
+    return <ErrorState description="订单加载失败，请稍后重试。" onRetry={() => void refetch()} />
   }
 
   const discount = Number(order.discount)
@@ -152,7 +208,7 @@ export default function OrderDetailPage() {
           <Card>
             <CardHeader>
               <CardTitle>支付信息</CardTitle>
-              <CardDescription>由支付插件回调写入</CardDescription>
+              <CardDescription>由支付网关回写</CardDescription>
             </CardHeader>
             <CardContent>
               <InfoList className="grid-cols-1 sm:grid-cols-1">
@@ -180,7 +236,7 @@ export default function OrderDetailPage() {
           <Card>
             <CardHeader>
               <CardTitle>操作</CardTitle>
-              <CardDescription>演示环境不会发起真实请求</CardDescription>
+              <CardDescription>内置演示网关，不会产生真实扣费</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               <Button asChild className="w-full">
@@ -190,19 +246,19 @@ export default function OrderDetailPage() {
                 </Link>
               </Button>
               <Button
-                variant="outline"
                 className="w-full"
-                onClick={() => toast.info('演示环境：订单支付接口未接入')}
+                disabled={order.status !== 'pending' || pay.isPending}
+                onClick={() => pay.mutate()}
               >
-                <RotateCcw data-icon aria-hidden="true" />
-                重新支付
+                <CreditCard data-icon aria-hidden="true" />
+                {order.status === 'paid' ? '已支付' : pay.isPending ? '正在支付…' : '立即支付'}
               </Button>
               <Separator className="my-1" />
               <Button
                 variant="destructive"
                 className="w-full"
-                disabled={order.status !== 'pending'}
-                onClick={() => toast.info('演示环境：订单取消接口未接入')}
+                disabled={order.status !== 'pending' || cancel.isPending}
+                onClick={() => cancel.mutate()}
               >
                 <XCircle data-icon aria-hidden="true" />
                 取消订单

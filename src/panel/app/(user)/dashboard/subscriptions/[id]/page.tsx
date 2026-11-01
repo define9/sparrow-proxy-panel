@@ -4,20 +4,20 @@ import type { Subscription } from '@sparrow/contracts'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
   CalendarClock,
   Globe2,
-  Laptop,
   Link2,
   MonitorSmartphone,
-  Rss,
-  Smartphone
+  Rss
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from 'cn'
 import { CopyButton } from '@/components/common/copy-button'
 import { EmptyState } from '@/components/common/empty-state'
+import { ErrorState } from '@/components/common/error-state'
 import { PageHeader } from '@/components/common/page-header'
 import { QuotaBar } from '@/components/common/quota-bar'
 import { StateBadge } from '@/components/common/state-badge'
@@ -37,23 +37,38 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { formatBytes, formatDate, formatDay, percent } from '@/lib/format'
-import { subscriptions } from '@/lib/mock/catalog'
-import {
-  SUBSCRIPTION_FORMATS,
-  demoDaysLeft,
-  devices,
-  nodeGroupSummaries,
-  subscriptionUrl,
-  type SubscriptionFormat
-} from '@/lib/mock/user-data'
+import { apiFetch, ApiClientError, queryKeys } from '@/lib/api/client'
+import type { Subscription as SubscriptionView } from '@/lib/api/types'
+import { SUBSCRIPTION_FORMATS, subscriptionUrl, type SubscriptionFormat } from '@/lib/billing'
+import { daysLeft, formatBytes, formatDate, formatDay, percent } from '@/lib/format'
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof ApiClientError ? error.message : fallback
+}
 
 export default function SubscriptionDetailPage() {
   const params = useParams<{ id: string }>()
-  const subscription = subscriptions.find((item) => item.id === params.id)
 
-  if (!subscription) {
+  const { data: subscription, isPending, isError, error, refetch } = useQuery({
+    queryKey: queryKeys.subscription(params.id),
+    queryFn: () => apiFetch<Subscription>(`/api/v1/user/subscriptions/${params.id}`),
+    retry: false
+  })
+
+  const notFound = error instanceof ApiClientError && error.statusCode === 404
+
+  if (isPending) {
+    return (
+      <>
+        <PageHeader title="订阅详情" description="正在加载订阅…" />
+        <Skeleton className="h-72 rounded-xl" />
+      </>
+    )
+  }
+
+  if (notFound) {
     return (
       <EmptyState
         icon={Rss}
@@ -68,16 +83,37 @@ export default function SubscriptionDetailPage() {
     )
   }
 
+  if (isError || !subscription) {
+    return <ErrorState description="订阅加载失败，请稍后重试。" onRetry={() => void refetch()} />
+  }
+
   return <SubscriptionDetail key={subscription.id} subscription={subscription} />
 }
 
-function SubscriptionDetail({ subscription }: { subscription: Subscription }) {
+function SubscriptionDetail({ subscription }: { subscription: SubscriptionView }) {
+  const queryClient = useQueryClient()
   const [format, setFormat] = useState<SubscriptionFormat>(subscription.format)
+  const [deviceLimit, setDeviceLimit] = useState(String(subscription.deviceLimit))
 
-  const currentUrl = subscriptionUrl(subscription.token, subscription.format)
-  const days = demoDaysLeft(subscription.expireAt)
+  const patch = useMutation({
+    mutationFn: (body: { format?: SubscriptionFormat; deviceLimit?: number }) =>
+      apiFetch<Subscription>(`/api/v1/user/subscriptions/${subscription.id}`, {
+        method: 'PATCH',
+        body
+      }),
+    onSuccess: () => {
+      toast.success('订阅设置已更新')
+      void queryClient.invalidateQueries({ queryKey: queryKeys.subscription(subscription.id) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.overview })
+    },
+    onError: (error) => toast.error(errorMessage(error, '更新失败，请稍后重试'))
+  })
+
+  const currentUrl = subscriptionUrl(subscription.token, format)
+  const days = daysLeft(subscription.expireAt)
   const usage = percent(subscription.trafficUsed, subscription.trafficLimit)
-  const activeDevices = devices.length
+  const parsedDeviceLimit = Number(deviceLimit)
 
   return (
     <>
@@ -124,7 +160,11 @@ function SubscriptionDetail({ subscription }: { subscription: Subscription }) {
             <CardContent>
               <Tabs
                 value={format}
-                onValueChange={(value) => setFormat(value as SubscriptionFormat)}
+                onValueChange={(value) => {
+                  const next = value as SubscriptionFormat
+                  setFormat(next)
+                  patch.mutate({ format: next })
+                }}
               >
                 <TabsList>
                   {SUBSCRIPTION_FORMATS.map((item) => (
@@ -189,7 +229,10 @@ function SubscriptionDetail({ subscription }: { subscription: Subscription }) {
                   {formatBytes(subscription.trafficUsed, 2)}
                 </InfoItem>
                 <InfoItem label="剩余流量" mono>
-                  {formatBytes(subscription.trafficLimit - subscription.trafficUsed, 2)}
+                  {formatBytes(
+                    Math.max(subscription.trafficLimit - subscription.trafficUsed, 0),
+                    2
+                  )}
                 </InfoItem>
                 <InfoItem label="下载" mono>
                   {formatBytes(subscription.download, 2)}
@@ -248,12 +291,8 @@ function SubscriptionDetail({ subscription }: { subscription: Subscription }) {
                     : '不限速'}
                 </InfoItem>
               </InfoList>
-              <Button
-                className="mt-4 w-full"
-                variant="outline"
-                onClick={() => toast.info('演示环境：续费接口未接入')}
-              >
-                续费这个套餐
+              <Button className="mt-4 w-full" variant="outline" asChild>
+                <Link href="/dashboard/plans">续费这个套餐</Link>
               </Button>
             </CardContent>
           </Card>
@@ -269,45 +308,44 @@ function SubscriptionDetail({ subscription }: { subscription: Subscription }) {
                   />
                   <CardTitle>在线设备</CardTitle>
                 </div>
-                <Badge variant="outline">
-                  {activeDevices} / {subscription.deviceLimit}
-                </Badge>
+                <Badge variant="outline">0 / {subscription.deviceLimit}</Badge>
               </div>
               <CardDescription>同时在线设备数达到上限后新设备无法连接</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <ul className="flex flex-col gap-3">
-                {devices.map((device) => {
-                  const DeviceIcon = device.platform.startsWith('iOS') ? Smartphone : Laptop
-                  return (
-                    <li key={device.id} className="flex items-start gap-2">
-                      <DeviceIcon
-                        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                        data-icon
-                        aria-hidden="true"
-                      />
-                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <span className="flex flex-wrap items-center gap-1.5 text-sm">
-                          {device.name}
-                          {device.current ? <Badge variant="success">当前设备</Badge> : null}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{device.client}</span>
-                        <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                          {device.ip}
-                        </span>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
+              <p className="text-sm text-muted-foreground">
+                设备明细由节点侧上报，接入后这里会展示当前在线终端。
+              </p>
               <Separator />
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => toast.info('演示环境：设备管理接口未接入')}
-              >
-                管理设备
-              </Button>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="sub-device-limit">设备上限</FieldLabel>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="sub-device-limit"
+                      type="number"
+                      min={1}
+                      max={999}
+                      value={deviceLimit}
+                      onChange={(event) => setDeviceLimit(event.target.value)}
+                      className="w-28"
+                    />
+                    <Button
+                      variant="outline"
+                      disabled={
+                        patch.isPending ||
+                        !Number.isInteger(parsedDeviceLimit) ||
+                        parsedDeviceLimit < 1 ||
+                        parsedDeviceLimit === subscription.deviceLimit
+                      }
+                      onClick={() => patch.mutate({ deviceLimit: parsedDeviceLimit })}
+                    >
+                      保存
+                    </Button>
+                  </div>
+                  <FieldDescription>范围 1–999，修改后节点下次同步生效。</FieldDescription>
+                </Field>
+              </FieldGroup>
             </CardContent>
           </Card>
 
@@ -317,27 +355,12 @@ function SubscriptionDetail({ subscription }: { subscription: Subscription }) {
                 <Globe2 className="size-4 text-muted-foreground" data-icon aria-hidden="true" />
                 <CardTitle>可用节点组</CardTitle>
               </div>
-              <CardDescription>订阅会自动包含以下线路</CardDescription>
+              <CardDescription>订阅会自动包含商品绑定的线路</CardDescription>
             </CardHeader>
             <CardContent>
-              <ul className="flex flex-col gap-3">
-                {nodeGroupSummaries.map((group) => (
-                  <li key={group.id} className="flex flex-col gap-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm font-medium">
-                        {group.region} · {group.name}
-                      </span>
-                      <Badge variant={group.onlineCount > 0 ? 'success' : 'secondary'}>
-                        {group.onlineCount} / {group.nodeCount} 在线
-                      </Badge>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{group.remark}</span>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {group.protocols.join(' · ')}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <p className="text-sm text-muted-foreground">
+                节点组明细由订阅渲染模块提供，接入后这里会展示可用线路与在线数。
+              </p>
             </CardContent>
           </Card>
         </div>

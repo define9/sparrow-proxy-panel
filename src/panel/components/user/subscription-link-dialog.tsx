@@ -18,7 +18,7 @@ import {
   SUBSCRIPTION_FORMATS,
   subscriptionUrl,
   type SubscriptionFormat
-} from '@/lib/mock/user-data'
+} from '@/lib/billing'
 import { QrPreview } from '@/components/user/qr-preview'
 
 function LinkBody({ subscription }: { subscription: Subscription }) {
@@ -69,7 +69,7 @@ function LinkBody({ subscription }: { subscription: Subscription }) {
       </Tabs>
 
       <p className="text-xs text-muted-foreground">
-        演示环境：二维码为占位图，订阅链接不会真正输出节点配置。请勿将链接分享给他人。
+        订阅链接包含访问凭证，请勿分享给他人；泄露后请联系管理员重置。
       </p>
     </div>
   )

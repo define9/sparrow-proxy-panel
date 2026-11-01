@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
   Check,
@@ -13,6 +14,7 @@ import {
   Wifi
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { ErrorState } from '@/components/common/error-state'
 import { EmptyState } from '@/components/common/empty-state'
 import { PageHeader } from '@/components/common/page-header'
 import { Badge } from '@/components/ui/badge'
@@ -27,9 +29,11 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
+import { apiFetch, ApiClientError, queryKeys } from '@/lib/api/client'
+import type { Order, Plan } from '@/lib/api/types'
+import { planBenefits } from '@/lib/billing'
 import { formatMoney } from '@/lib/format'
-import { plans } from '@/lib/mock/catalog'
-import { planBenefits } from '@/lib/mock/user-data'
 
 const TYPE_LABELS: Record<string, string> = {
   traffic: '流量包',
@@ -37,11 +41,54 @@ const TYPE_LABELS: Record<string, string> = {
   bandwidth: '带宽包'
 }
 
+function PlanDetailSkeleton() {
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <Skeleton className="h-96 rounded-xl lg:col-span-2" />
+      <Skeleton className="h-96 rounded-xl" />
+    </div>
+  )
+}
+
 export default function PlanDetailPage() {
   const params = useParams<{ id: string }>()
-  const plan = plans.find((item) => item.id === params.id)
+  const router = useRouter()
+  const queryClient = useQueryClient()
 
-  if (!plan) {
+  const { data: plan, isPending, isError, error, refetch } = useQuery({
+    queryKey: queryKeys.plan(params.id),
+    queryFn: () => apiFetch<Plan>(`/api/v1/user/plans/${params.id}`),
+    retry: false
+  })
+
+  const createOrder = useMutation({
+    mutationFn: (planId: string) =>
+      apiFetch<Order>('/api/v1/user/orders', { method: 'POST', body: { planId } }),
+    onSuccess: (order) => {
+      toast.success('下单成功，请在订单页完成支付')
+      void queryClient.invalidateQueries({ queryKey: queryKeys.orders() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.overview })
+      router.push(`/dashboard/orders/${order.orderNo}`)
+    },
+    onError: (mutationError) => {
+      toast.error(
+        mutationError instanceof ApiClientError ? mutationError.message : '下单失败，请稍后重试'
+      )
+    }
+  })
+
+  const notFound = error instanceof ApiClientError && error.statusCode === 404
+
+  if (isPending) {
+    return (
+      <>
+        <PageHeader title="商品详情" description="正在加载商品信息…" />
+        <PlanDetailSkeleton />
+      </>
+    )
+  }
+
+  if (notFound) {
     return (
       <EmptyState
         icon={PackageSearch}
@@ -54,6 +101,10 @@ export default function PlanDetailPage() {
         }
       />
     )
+  }
+
+  if (isError || !plan) {
+    return <ErrorState description="商品详情加载失败，请稍后重试。" onRetry={() => void refetch()} />
   }
 
   const available = plan.status === 'active' && (plan.stock === null || plan.stock > 0)
@@ -172,7 +223,7 @@ export default function PlanDetailPage() {
         <Card className="h-fit lg:sticky lg:top-20">
           <CardHeader>
             <CardTitle>价格</CardTitle>
-            <CardDescription>演示数据，不会产生真实订单</CardDescription>
+            <CardDescription>下单后 2 小时内完成支付，超时自动关闭</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-wrap items-baseline gap-2">
@@ -214,16 +265,16 @@ export default function PlanDetailPage() {
 
             <Button
               className="w-full"
-              disabled={!available}
-              onClick={() => toast.info('演示环境：下单接口未接入')}
+              disabled={!available || createOrder.isPending}
+              onClick={() => createOrder.mutate(plan.id)}
             >
               <ShoppingCart data-icon aria-hidden="true" />
-              {available ? '立即购买' : '已售罄'}
+              {available ? (createOrder.isPending ? '正在下单…' : '立即购买') : '已售罄'}
             </Button>
             <Button
               className="w-full"
               variant="outline"
-              onClick={() => toast.info('演示环境：工单系统未接入')}
+              onClick={() => toast.info('工单系统尚未接入')}
             >
               咨询客服
             </Button>

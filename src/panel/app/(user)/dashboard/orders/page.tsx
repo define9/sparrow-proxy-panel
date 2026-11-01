@@ -5,9 +5,11 @@ import type { ColumnDef } from '@tanstack/react-table'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
-import { Copy, Eye, MoreHorizontal, Search, XCircle } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Copy, CreditCard, Eye, MoreHorizontal, Search, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { DataTable } from '@/components/common/data-table'
+import { ErrorState } from '@/components/common/error-state'
 import { PageHeader } from '@/components/common/page-header'
 import { StateBadge } from '@/components/common/state-badge'
 import { Badge } from '@/components/ui/badge'
@@ -20,10 +22,12 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { apiFetch, ApiClientError, queryKeys, type ListResponse } from '@/lib/api/client'
+import type { PayResult } from '@/lib/api/types'
+import { ORDER_STATUS_LABELS, orderTotal, paymentMethodLabel } from '@/lib/billing'
 import { formatDate, formatMoney } from '@/lib/format'
-import { orders } from '@/lib/mock/catalog'
-import { ORDER_STATUS_LABELS, orderTotal, paymentMethodLabel } from '@/lib/mock/user-data'
 
 type StatusFilter = 'all' | OrderStatus
 
@@ -36,30 +40,59 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'refunded', label: ORDER_STATUS_LABELS.refunded }
 ]
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof ApiClientError ? error.message : fallback
+}
+
 export default function OrdersPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [status, setStatus] = useState<StatusFilter>('all')
-  const [query, setQuery] = useState('')
+  const [keyword, setKeyword] = useState('')
 
-  const sorted = useMemo(
-    () => [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    []
-  )
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: queryKeys.orders({ status }),
+    queryFn: () => {
+      const params = new URLSearchParams({ page: '1', pageSize: '100' })
+      if (status !== 'all') params.set('status', status)
+      return apiFetch<ListResponse<Order>>(`/api/v1/user/orders?${params.toString()}`)
+    }
+  })
 
-  const visible = useMemo(() => {
-    const keyword = query.trim().toLowerCase()
-    return sorted.filter((order) => {
-      const matchStatus = status === 'all' || order.status === status
-      const matchKeyword =
-        keyword.length === 0 ||
-        order.orderNo.toLowerCase().includes(keyword) ||
-        order.planName.toLowerCase().includes(keyword)
-      return matchStatus && matchKeyword
-    })
-  }, [sorted, status, query])
+  const invalidateOrders = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.orders() })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.overview })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions() })
+  }
 
-  const countOf = (value: StatusFilter) =>
-    value === 'all' ? sorted.length : sorted.filter((order) => order.status === value).length
+  const cancelOrder = useMutation({
+    mutationFn: (orderNo: string) =>
+      apiFetch<Order>(`/api/v1/user/orders/${orderNo}/cancel`, { method: 'POST' }),
+    onSuccess: () => {
+      toast.success('订单已取消')
+      invalidateOrders()
+    },
+    onError: (error) => toast.error(errorMessage(error, '取消失败，请稍后重试'))
+  })
+
+  const payOrder = useMutation({
+    mutationFn: (orderNo: string) =>
+      apiFetch<PayResult>(`/api/v1/user/orders/${orderNo}/pay`, { method: 'POST' }),
+    onSuccess: (result) => {
+      toast.success(result.idempotent ? '订单已支付' : '支付成功，订阅已开通')
+      invalidateOrders()
+    },
+    onError: (error) => toast.error(errorMessage(error, '支付失败，请稍后重试'))
+  })
+
+  const rows = useMemo(() => {
+    const query = keyword.trim().toLowerCase()
+    if (!query) return data?.data ?? []
+    return (data?.data ?? []).filter(
+      (order) =>
+        order.orderNo.toLowerCase().includes(query) || order.planName.toLowerCase().includes(query)
+    )
+  }, [data, keyword])
 
   const columns = useMemo<ColumnDef<Order, unknown>[]>(
     () => [
@@ -125,6 +158,7 @@ export default function OrdersPage() {
         header: '',
         cell: ({ row }) => {
           const order = row.original
+          const pending = order.status === 'pending'
           return (
             <div className="flex justify-end">
               <DropdownMenu>
@@ -151,9 +185,16 @@ export default function OrdersPage() {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
+                    disabled={!pending || payOrder.isPending}
+                    onSelect={() => payOrder.mutate(order.orderNo)}
+                  >
+                    <CreditCard data-icon aria-hidden="true" />
+                    立即支付
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     variant="destructive"
-                    disabled={order.status !== 'pending'}
-                    onSelect={() => toast.info('演示环境：订单取消接口未接入')}
+                    disabled={!pending || cancelOrder.isPending}
+                    onSelect={() => cancelOrder.mutate(order.orderNo)}
                   >
                     <XCircle data-icon aria-hidden="true" />
                     取消订单
@@ -165,15 +206,15 @@ export default function OrdersPage() {
         }
       }
     ],
-    [router]
+    [router, payOrder, cancelOrder]
   )
 
   return (
     <>
       <PageHeader
         title="订单"
-        description="查看支付状态、金额与历史订单。演示环境不会产生真实扣费。"
-        actions={<Badge variant="outline">共 {visible.length} 笔</Badge>}
+        description="查看支付状态、金额与历史订单。"
+        actions={<Badge variant="outline">共 {data?.meta.total ?? 0} 笔</Badge>}
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -182,9 +223,6 @@ export default function OrdersPage() {
             {STATUS_FILTERS.map((item) => (
               <TabsTrigger key={item.value} value={item.value}>
                 {item.label}
-                <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                  {countOf(item.value)}
-                </span>
               </TabsTrigger>
             ))}
           </TabsList>
@@ -195,20 +233,26 @@ export default function OrdersPage() {
             <Search data-icon aria-hidden="true" />
           </InputGroupAddon>
           <InputGroupInput
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
             placeholder="搜索单号或套餐"
             aria-label="搜索订单"
           />
         </InputGroup>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={visible}
-        emptyTitle="没有符合条件的订单"
-        emptyDescription="调整筛选条件，或先去选购一个套餐。"
-      />
+      {isPending ? (
+        <Skeleton className="h-64 rounded-lg" />
+      ) : isError ? (
+        <ErrorState description="订单列表加载失败，请稍后重试。" onRetry={() => void refetch()} />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={rows}
+          emptyTitle="没有符合条件的订单"
+          emptyDescription="调整筛选条件，或先去选购一个套餐。"
+        />
+      )}
     </>
   )
 }

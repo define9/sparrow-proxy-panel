@@ -5,10 +5,12 @@ import type { ColumnDef } from '@tanstack/react-table'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
-import { Copy, Eye, MoreHorizontal, PauseCircle, PlayCircle, QrCode } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Copy, Eye, MoreHorizontal, QrCode } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from 'cn'
 import { DataTable } from '@/components/common/data-table'
+import { ErrorState } from '@/components/common/error-state'
 import { PageHeader } from '@/components/common/page-header'
 import { QuotaBar } from '@/components/common/quota-bar'
 import { StateBadge } from '@/components/common/state-badge'
@@ -22,17 +24,26 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { formatDate } from '@/lib/format'
-import { subscriptions } from '@/lib/mock/catalog'
-import { demoDaysLeft, subscriptionUrl } from '@/lib/mock/user-data'
+import { Skeleton } from '@/components/ui/skeleton'
+import { apiFetch, queryKeys, type ListResponse } from '@/lib/api/client'
+import { subscriptionUrl } from '@/lib/billing'
+import { daysLeft, formatDate } from '@/lib/format'
 
 export default function SubscriptionsPage() {
   const router = useRouter()
   const [dialogSub, setDialogSub] = useState<Subscription | null>(null)
 
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: queryKeys.subscriptions(),
+    queryFn: () => apiFetch<ListResponse<Subscription>>('/api/v1/user/subscriptions')
+  })
+
   const sorted = useMemo(
-    () => [...subscriptions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    []
+    () =>
+      [...(data?.data ?? [])].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ),
+    [data]
   )
 
   const columns = useMemo<ColumnDef<Subscription, unknown>[]>(
@@ -79,7 +90,7 @@ export default function SubscriptionsPage() {
         id: 'daysLeft',
         header: '剩余天数',
         cell: ({ row }) => {
-          const days = demoDaysLeft(row.original.expireAt)
+          const days = daysLeft(row.original.expireAt)
           return (
             <span
               className={cn(
@@ -128,26 +139,10 @@ export default function SubscriptionsPage() {
                     <Copy data-icon aria-hidden="true" />
                     复制链接
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => setDialogSub(subscription)}>
                     <QrCode data-icon aria-hidden="true" />
                     二维码预览
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() =>
-                      toast.info(
-                        subscription.status === 'paused'
-                          ? '演示环境：恢复订阅接口未接入'
-                          : '演示环境：暂停订阅接口未接入'
-                      )
-                    }
-                  >
-                    {subscription.status === 'paused' ? (
-                      <PlayCircle data-icon aria-hidden="true" />
-                    ) : (
-                      <PauseCircle data-icon aria-hidden="true" />
-                    )}
-                    {subscription.status === 'paused' ? '恢复订阅' : '暂停订阅'}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -174,12 +169,18 @@ export default function SubscriptionsPage() {
         }
       />
 
-      <DataTable
-        columns={columns}
-        data={sorted}
-        emptyTitle="还没有订阅"
-        emptyDescription="购买套餐后订阅会自动开通，并出现在这里。"
-      />
+      {isPending ? (
+        <Skeleton className="h-64 rounded-lg" />
+      ) : isError ? (
+        <ErrorState description="订阅列表加载失败，请稍后重试。" onRetry={() => void refetch()} />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={sorted}
+          emptyTitle="还没有订阅"
+          emptyDescription="购买套餐后订阅会自动开通，并出现在这里。"
+        />
+      )}
 
       <SubscriptionLinkDialog
         subscription={dialogSub}
