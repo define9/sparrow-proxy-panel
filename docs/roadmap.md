@@ -11,7 +11,7 @@
 - [x] `packages/contracts`：zod 类型 + 权限点（24 个）
 - [x] Next.js 应用骨架：App Router、Tailwind 4 + shadcn、主题与明暗模式
 - [x] 数据模型：31 张表、迁移已应用、seed 脚本
-- [ ] CI：lint / typecheck / build / 迁移漂移检测
+- [ ] CI：lint / typecheck / build / `check:layers` / 迁移漂移检测
 - [ ] Renovate 与版本锁定
 
 ### 后端

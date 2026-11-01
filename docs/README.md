@@ -16,28 +16,29 @@
 | # | 文档 | 内容 |
 |---|---|---|
 | 3 | [architecture/overview.md](architecture/overview.md) | 分层、部署拓扑、请求生命周期、性能预算、容错 |
-| 4 | [architecture/tech-stack.md](architecture/tech-stack.md) | 选型与版本（含"为什么不选"） |
-| 5 | [architecture/monorepo-layout.md](architecture/monorepo-layout.md) | **ADR-0001：为什么 monorepo**、目录、依赖方向 |
-| 6 | [architecture/data-model.md](architecture/data-model.md) | 表结构、索引、迁移策略 |
-| 7 | [architecture/api-design.md](architecture/api-design.md) | 接口分层、四套鉴权、Agent 协议、错误码、限流 |
-| 8 | [architecture/plugin-system.md](architecture/plugin-system.md) | manifest、hook、定时任务、git URL 安装、支付渠道、索引源 |
-| 9 | [architecture/agent-cli.md](architecture/agent-cli.md) | Agent 配置、运行循环、自更新、离线容错 |
-| 10 | [architecture/security.md](architecture/security.md) | 威胁模型、密钥管理、支付安全、上线清单 |
+| 4 | [architecture/backend-layers.md](architecture/backend-layers.md) | **后端分层**（route → service → db）、复用点、事务、`check:layers` 门禁 |
+| 5 | [architecture/tech-stack.md](architecture/tech-stack.md) | 选型与版本（含"为什么不选"） |
+| 6 | [architecture/monorepo-layout.md](architecture/monorepo-layout.md) | **ADR-0001：为什么 monorepo**、目录、依赖方向 |
+| 7 | [architecture/data-model.md](architecture/data-model.md) | 表结构、索引、迁移策略 |
+| 8 | [architecture/api-design.md](architecture/api-design.md) | 接口分层、四套鉴权、Agent 协议、错误码、限流 |
+| 9 | [architecture/plugin-system.md](architecture/plugin-system.md) | manifest、hook、定时任务、git URL 安装、支付渠道、索引源 |
+| 10 | [architecture/agent-cli.md](architecture/agent-cli.md) | Agent 配置、运行循环、自更新、离线容错 |
+| 11 | [architecture/security.md](architecture/security.md) | 威胁模型、密钥管理、支付安全、上线清单 |
 
 ### 前端
 
 | # | 文档 | 内容 |
 |---|---|---|
-| 11 | [frontend/frontend-architecture.md](frontend/frontend-architecture.md) | 目录、布局、路由、数据获取、表格/表单模式 |
-| 12 | [frontend/design-system.md](frontend/design-system.md) | shadcn CSS 变量、状态色、图标、字体、明暗模式 |
-| 13 | [frontend/i18n.md](frontend/i18n.md) | next-intl 方案、key 规范、CI 校验 |
-| 14 | [frontend/navigation.md](frontend/navigation.md) | 菜单与路由、权限过滤、命令面板、快捷键、守卫 |
+| 12 | [frontend/frontend-architecture.md](frontend/frontend-architecture.md) | 目录、布局、路由、数据获取、表格/表单模式 |
+| 13 | [frontend/design-system.md](frontend/design-system.md) | shadcn CSS 变量、状态色、图标、字体、明暗模式 |
+| 14 | [frontend/i18n.md](frontend/i18n.md) | next-intl 方案、key 规范、CI 校验 |
+| 15 | [frontend/navigation.md](frontend/navigation.md) | 菜单与路由、权限过滤、命令面板、快捷键、守卫 |
 
 ### 计划
 
 | # | 文档 | 内容 |
 |---|---|---|
-| 15 | [roadmap.md](roadmap.md) | P0–P3、验收标准、风险登记 |
+| 16 | [roadmap.md](roadmap.md) | P0–P3、验收标准、风险登记 |
 
 ## 已锁定的核心决策
 

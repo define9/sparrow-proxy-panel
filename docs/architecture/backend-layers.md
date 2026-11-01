@@ -172,10 +172,11 @@ CI 里与 lint / typecheck 一起跑（见 roadmap P0「CI」）。
 
 | 项 | 现状 |
 |---|---|
-| 有服务层 | ✅ `lib/services/` 10 个域 |
-| route 直连 db | ⚠️ 28 个（auth / agent / admin.users / admin.nodes / admin.logs / admin.plugins / admin.coupons / admin.settings） |
+| 有服务层 | ✅ `lib/services/` 12 个域（auth / agent / admin-users / settings / nodes / coupons / logs / plugins / billing / admin-commerce / stats / subscription / site） |
+| route 直连 db | ✅ 0 个（`check:layers` 通过，60 个 handler 平均 30 行以内） |
 | schema 目录 | ⚠️ 分散在 `lib/api/{schemas,commerce-schemas,node-schemas}.ts`，待合并到 `lib/schemas/` |
 | 展示常量 | ⚠️ `lib/billing.ts`、`lib/admin-labels.ts` 在 lib 根，待归入 `lib/labels/` |
 | 测试 | ⚠️ 只有 `lib/agent/sign.test.ts`；service 单测待补 |
 
-收敛顺序：先把 28 个 route 的业务搬进 service（行为不变），再归一目录，最后补 service 单测。
+已完成：28 个 route 的业务下沉到 service（纯重构，响应与错误码逐项比对一致）。
+待做：schema / labels 目录归一、service 单测、把 `check:layers` 接进 CI。
