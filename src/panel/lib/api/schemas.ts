@@ -122,8 +122,22 @@ export const settingsSchema = z.object({
     .partial(),
   payment: z
     .object({
-      epayEnabled: z.boolean().default(true),
-      stripeEnabled: z.boolean().default(false)
+      // 旧设置页两个开关（仍然写回 gateways.<key>.enabled）
+      epayEnabled: z.boolean().optional(),
+      stripeEnabled: z.boolean().optional(),
+      // 新结构（支付渠道页走 /admin/payment/* 接口，这里保持兼容）
+      default: z.string().optional(),
+      gateways: z
+        .record(
+          z.string(),
+          z
+            .object({
+              enabled: z.boolean().optional(),
+              config: z.record(z.string(), z.unknown()).optional()
+            })
+            .partial()
+        )
+        .optional()
     })
     .partial(),
   mail: z
@@ -154,6 +168,15 @@ export const settingsSchema = z.object({
       password: z.string().optional()
     })
     .partial()
+})
+
+export const paymentGatewayUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  config: z.record(z.string(), z.unknown()).optional()
+})
+
+export const paymentDefaultSchema = z.object({
+  key: z.string().trim().min(1, '请选择默认支付渠道')
 })
 
 export const setupSchema = z
