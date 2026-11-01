@@ -394,74 +394,101 @@ export async function payOrder(userId: string, orderNo: string): Promise<PayResu
       throw new ApiError(409, 'ORDER_NOT_PAYABLE', '当前订单状态不可支付')
     }
 
-    const [plan] = await tx.select().from(plans).where(eq(plans.id, row.planId)).limit(1)
-    if (!plan) throw new ApiError(404, 'PLAN_NOT_FOUND', '商品不存在')
-
-    const now = new Date()
-    const tradeNo = `DEMO${now.getTime()}${randomInt(1000, 9999)}`
-
-    await tx.insert(paymentRecords).values({
-      orderId: row.id,
-      gateway: 'demo',
-      amount: row.amount,
-      status: 'success',
-      tradeNo,
-      raw: JSON.stringify({ gateway: 'demo', tradeNo, paidAt: now.toISOString() })
-    })
-
-    await tx
-      .update(orders)
-      .set({
-        status: 'paid',
-        paidAt: now,
-        paymentMethod: 'demo',
-        tradeNo,
-        updatedAt: now
-      })
-      .where(eq(orders.id, row.id))
-
-    await tx
-      .update(plans)
-      .set({ soldCount: sql`${plans.soldCount} + 1`, updatedAt: now })
-      .where(eq(plans.id, plan.id))
-
-    const trafficLimit = plan.trafficGb > 0 ? String(plan.trafficGb * GB) : '0'
-
-    const [subscription] = await tx
-      .insert(subscriptions)
-      .values({
-        userId,
-        planId: plan.id,
-        orderId: row.id,
-        token: randomUUID(),
-        format: 'clash',
-        status: 'active',
-        deviceLimit: plan.deviceLimit,
-        speedLimitMbps: plan.speedLimitMbps,
-        trafficLimit,
-        expireAt: new Date(now.getTime() + plan.durationDays * DAY)
-      })
-      .returning({ id: subscriptions.id })
-
-    // 复制商品可用的节点组，订阅输出时直接用
-    const groups = await tx
-      .select({ nodeGroupId: planNodeGroups.nodeGroupId })
-      .from(planNodeGroups)
-      .where(eq(planNodeGroups.planId, plan.id))
-
-    if (groups.length > 0) {
-      await tx
-        .insert(subscriptionNodeGroups)
-        .values(groups.map((group) => ({ subscriptionId: subscription.id, nodeGroupId: group.nodeGroupId })))
-    }
+    const settled = await settleOrderAsPaid(tx, row, 'demo')
 
     return {
       orderNo,
       payUrl: payUrl(orderNo),
       idempotent: false,
-      subscriptionId: subscription.id
+      subscriptionId: settled.subscriptionId
     }
   })
+}
+
+/* ------------------------ 订单落定（支付/手动完成共用） ------------------------ */
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+export interface SettleOrderOptions {
+  tradeNo?: string
+  raw?: Record<string, unknown>
+}
+
+/**
+ * 订单 pending → paid，并开通订阅。
+ * 调用方负责事务边界与订单行锁（检测并发重复支付）。
+ * 演示网关与管理端「手动完成」共用这一段开通逻辑，避免两处状态机漂移。
+ */
+export async function settleOrderAsPaid(
+  tx: Tx,
+  order: OrderRow,
+  gateway: string,
+  options: SettleOrderOptions = {}
+): Promise<{ subscriptionId: string; tradeNo: string }> {
+  const [plan] = await tx.select().from(plans).where(eq(plans.id, order.planId)).limit(1)
+  if (!plan) throw new ApiError(404, 'PLAN_NOT_FOUND', '商品不存在')
+
+  const now = new Date()
+  const tradeNo = options.tradeNo ?? `${gateway.toUpperCase()}${now.getTime()}${randomInt(1000, 9999)}`
+
+  await tx.insert(paymentRecords).values({
+    orderId: order.id,
+    gateway,
+    amount: order.amount,
+    status: 'success',
+    tradeNo,
+    raw: JSON.stringify(
+      options.raw ?? { gateway, tradeNo, paidAt: now.toISOString() }
+    )
+  })
+
+  await tx
+    .update(orders)
+    .set({
+      status: 'paid',
+      paidAt: now,
+      paymentMethod: gateway,
+      tradeNo,
+      updatedAt: now
+    })
+    .where(eq(orders.id, order.id))
+
+  await tx
+    .update(plans)
+    .set({ soldCount: sql`${plans.soldCount} + 1`, updatedAt: now })
+    .where(eq(plans.id, plan.id))
+
+  const trafficLimit = plan.trafficGb > 0 ? String(plan.trafficGb * GB) : '0'
+
+  const [subscription] = await tx
+    .insert(subscriptions)
+    .values({
+      userId: order.userId,
+      planId: plan.id,
+      orderId: order.id,
+      token: randomUUID(),
+      format: 'clash',
+      status: 'active',
+      deviceLimit: plan.deviceLimit,
+      speedLimitMbps: plan.speedLimitMbps,
+      trafficLimit,
+      expireAt: new Date(now.getTime() + plan.durationDays * DAY)
+    })
+    .returning({ id: subscriptions.id })
+
+  // 复制商品可用的节点组，订阅输出时直接用
+  const groups = await tx
+    .select({ nodeGroupId: planNodeGroups.nodeGroupId })
+    .from(planNodeGroups)
+    .where(eq(planNodeGroups.planId, plan.id))
+
+  if (groups.length > 0) {
+    await tx
+      .insert(subscriptionNodeGroups)
+      .values(groups.map((group) => ({ subscriptionId: subscription.id, nodeGroupId: group.nodeGroupId })))
+  }
+
+  return { subscriptionId: subscription.id, tradeNo }
 }
 
 /* --------------------------------- 订阅 ---------------------------------- */

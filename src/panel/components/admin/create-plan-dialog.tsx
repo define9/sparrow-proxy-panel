@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/dialog'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
+import { useCreateAdminPlan, useUpdateAdminPlan, type AdminPlanInput } from '@/lib/api/admin-commerce'
 
 interface PlanFormValues {
   name: string
@@ -38,6 +40,18 @@ const EMPTY_FORM: PlanFormValues = {
 }
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+function fromPlan(plan: Plan): PlanFormValues {
+  return {
+    name: plan.name,
+    slug: plan.slug,
+    price: plan.price,
+    trafficGb: String(plan.trafficGb),
+    durationDays: String(plan.durationDays),
+    deviceLimit: String(plan.deviceLimit),
+    stock: plan.stock === null ? '' : String(plan.stock)
+  }
+}
 
 function validate(values: PlanFormValues) {
   const errors: Partial<Record<keyof PlanFormValues, string>> = {}
@@ -70,24 +84,54 @@ function validate(values: PlanFormValues) {
 }
 
 interface CreatePlanDialogProps {
-  onCreated: (plan: Plan) => void
+  /** 传入商品即为编辑模式 */
+  plan?: Plan | null
+  /** 受控开关；编辑模式下由父组件传 */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  onCreated?: (plan: Plan) => void
 }
 
-export function CreatePlanDialog({ onCreated }: CreatePlanDialogProps) {
-  const [open, setOpen] = useState(false)
-  const [values, setValues] = useState<PlanFormValues>(EMPTY_FORM)
+export function CreatePlanDialog({ plan, open, onOpenChange, onCreated }: CreatePlanDialogProps) {
+  const editing = Boolean(plan)
+  const controlled = open !== undefined
+
+  const [internalOpen, setInternalOpen] = useState(false)
+  const [values, setValues] = useState<PlanFormValues>(() => (plan ? fromPlan(plan) : EMPTY_FORM))
   const [errors, setErrors] = useState<Partial<Record<keyof PlanFormValues, string>>>({})
 
-  function update<K extends keyof PlanFormValues>(key: K, value: string) {
+  const create = useCreateAdminPlan()
+  const update = useUpdateAdminPlan()
+  const pending = create.isPending || update.isPending
+  const dialogOpen = controlled ? Boolean(open) : internalOpen
+
+  function updateField<K extends keyof PlanFormValues>(key: K, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }))
     setErrors((prev) => ({ ...prev, [key]: undefined }))
   }
 
   function handleOpenChange(next: boolean) {
-    setOpen(next)
+    if (controlled) {
+      onOpenChange?.(next)
+      return
+    }
+    setInternalOpen(next)
     if (!next) {
       setValues(EMPTY_FORM)
       setErrors({})
+    }
+  }
+
+  function buildInput(): AdminPlanInput {
+    return {
+      name: values.name.trim(),
+      slug: values.slug.trim(),
+      price: Number(values.price).toFixed(2),
+      trafficGb: Number(values.trafficGb),
+      durationDays: Number(values.durationDays),
+      deviceLimit: Number(values.deviceLimit),
+      stock: values.stock.trim() ? Number(values.stock) : null,
+      ...(editing ? {} : { status: 'draft' as const })
     }
   }
 
@@ -99,43 +143,51 @@ export function CreatePlanDialog({ onCreated }: CreatePlanDialogProps) {
       return
     }
 
-    const plan: Plan = {
-      id: `plan_${Date.now()}`,
-      name: values.name.trim(),
-      slug: values.slug.trim(),
-      description: '',
-      type: 'traffic',
-      price: Number(values.price).toFixed(2),
-      originalPrice: null,
-      trafficGb: Number(values.trafficGb),
-      durationDays: Number(values.durationDays),
-      deviceLimit: Number(values.deviceLimit),
-      speedLimitMbps: 0,
-      stock: values.stock.trim() ? Number(values.stock) : null,
-      soldCount: 0,
-      status: 'draft',
-      isHot: false,
-      tags: [],
-      sort: 99
+    const input = buildInput()
+
+    if (plan) {
+      update.mutate(
+        { id: plan.id, ...input },
+        {
+          onSuccess: (saved) => {
+            toast.success(`商品「${saved.name}」已保存`)
+            onCreated?.(saved)
+            handleOpenChange(false)
+          },
+          onError: (error) => toast.error(error.message)
+        }
+      )
+      return
     }
 
-    onCreated(plan)
-    toast.success(`商品「${plan.name}」已创建（演示数据）`)
-    handleOpenChange(false)
+    create.mutate(input, {
+      onSuccess: (createdPlan) => {
+        toast.success(`商品「${createdPlan.name}」已创建`)
+        onCreated?.(createdPlan)
+        handleOpenChange(false)
+      },
+      onError: (error) => toast.error(error.message)
+    })
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus data-icon="inline-start" />
-          新建商品
-        </Button>
-      </DialogTrigger>
+    <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
+      {!controlled ? (
+        <DialogTrigger asChild>
+          <Button size="sm">
+            <Plus data-icon="inline-start" />
+            新建商品
+          </Button>
+        </DialogTrigger>
+      ) : null}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>新建商品</DialogTitle>
-          <DialogDescription>填写基础信息后保存为草稿，可在列表中上架。</DialogDescription>
+          <DialogTitle>{editing ? '编辑商品' : '新建商品'}</DialogTitle>
+          <DialogDescription>
+            {editing
+              ? '保存后立即生效，已售出订单与订阅不受影响。'
+              : '填写基础信息后保存为草稿，可在列表中上架。'}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} noValidate>
           <FieldGroup>
@@ -144,7 +196,7 @@ export function CreatePlanDialog({ onCreated }: CreatePlanDialogProps) {
               <Input
                 id="plan-name"
                 value={values.name}
-                onChange={(event) => update('name', event.target.value)}
+                onChange={(event) => updateField('name', event.target.value)}
                 placeholder="例如：标准月付"
                 aria-invalid={Boolean(errors.name)}
               />
@@ -156,7 +208,7 @@ export function CreatePlanDialog({ onCreated }: CreatePlanDialogProps) {
               <Input
                 id="plan-slug"
                 value={values.slug}
-                onChange={(event) => update('slug', event.target.value)}
+                onChange={(event) => updateField('slug', event.target.value)}
                 placeholder="standard-monthly"
                 className="font-mono"
                 aria-invalid={Boolean(errors.slug)}
@@ -175,7 +227,7 @@ export function CreatePlanDialog({ onCreated }: CreatePlanDialogProps) {
                   min={0}
                   step="0.01"
                   value={values.price}
-                  onChange={(event) => update('price', event.target.value)}
+                  onChange={(event) => updateField('price', event.target.value)}
                   className="font-mono tabular-nums"
                   aria-invalid={Boolean(errors.price)}
                 />
@@ -190,7 +242,7 @@ export function CreatePlanDialog({ onCreated }: CreatePlanDialogProps) {
                   inputMode="numeric"
                   min={0}
                   value={values.trafficGb}
-                  onChange={(event) => update('trafficGb', event.target.value)}
+                  onChange={(event) => updateField('trafficGb', event.target.value)}
                   className="font-mono tabular-nums"
                   aria-invalid={Boolean(errors.trafficGb)}
                 />
@@ -206,7 +258,7 @@ export function CreatePlanDialog({ onCreated }: CreatePlanDialogProps) {
                   inputMode="numeric"
                   min={1}
                   value={values.durationDays}
-                  onChange={(event) => update('durationDays', event.target.value)}
+                  onChange={(event) => updateField('durationDays', event.target.value)}
                   className="font-mono tabular-nums"
                   aria-invalid={Boolean(errors.durationDays)}
                 />
@@ -221,7 +273,7 @@ export function CreatePlanDialog({ onCreated }: CreatePlanDialogProps) {
                   inputMode="numeric"
                   min={0}
                   value={values.deviceLimit}
-                  onChange={(event) => update('deviceLimit', event.target.value)}
+                  onChange={(event) => updateField('deviceLimit', event.target.value)}
                   className="font-mono tabular-nums"
                   aria-invalid={Boolean(errors.deviceLimit)}
                 />
@@ -237,7 +289,7 @@ export function CreatePlanDialog({ onCreated }: CreatePlanDialogProps) {
                 inputMode="numeric"
                 min={0}
                 value={values.stock}
-                onChange={(event) => update('stock', event.target.value)}
+                onChange={(event) => updateField('stock', event.target.value)}
                 placeholder="留空表示不限库存"
                 className="font-mono tabular-nums"
                 aria-invalid={Boolean(errors.stock)}
@@ -250,7 +302,10 @@ export function CreatePlanDialog({ onCreated }: CreatePlanDialogProps) {
             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               取消
             </Button>
-            <Button type="submit">保存商品</Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? <Spinner data-icon="inline-start" /> : null}
+              {editing ? '保存修改' : '保存商品'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
