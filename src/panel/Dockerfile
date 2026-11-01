@@ -27,6 +27,7 @@ FROM deps AS migrator
 WORKDIR /app
 COPY src/panel/drizzle ./src/panel/drizzle
 COPY src/panel/scripts/migrate.mjs ./src/panel/scripts/migrate.mjs
+COPY src/panel/scripts/reset-password.mjs ./src/panel/scripts/reset-password.mjs
 WORKDIR /app/src/panel
 CMD ["node", "scripts/migrate.mjs"]
 
