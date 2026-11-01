@@ -11,7 +11,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 }
+          queries: {
+            // 境外访问时 RTT 很高：缓存久一点，切回菜单先用旧数据渲染再后台刷新
+            staleTime: 60_000,
+            gcTime: 10 * 60_000,
+            refetchOnWindowFocus: false,
+            // 列表换筛选时保留上一页数据，避免整块骨架闪烁
+            placeholderData: (previous: unknown) => previous,
+            retry: 1
+          }
         }
       })
   )

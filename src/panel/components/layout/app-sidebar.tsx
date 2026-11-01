@@ -26,6 +26,7 @@ import {
   useSidebar
 } from '@/components/ui/sidebar'
 import { NavUser } from '@/components/layout/nav-user'
+import { usePrefetchRoute } from '@/lib/api/prefetch'
 import type { SessionUser } from '@/lib/auth/types'
 import { adminNav, filterNav, label, userNav } from '@/lib/navigation'
 
@@ -41,6 +42,13 @@ export function AppSidebar({ navKey, permissions, title, user }: AppSidebarProps
   const locale = useLocale()
   const { state, isMobile } = useSidebar()
   const collapsed = state === 'collapsed' && !isMobile
+  const prefetch = usePrefetchRoute()
+
+  // 悬停/聚焦即预热：路由 chunk + 该页首个列表请求
+  const warm = (href: string) => ({
+    onMouseEnter: () => prefetch(href),
+    onFocus: () => prefetch(href)
+  })
 
   const visible = filterNav(navKey === 'admin' ? adminNav : userNav, permissions)
 
@@ -84,7 +92,7 @@ export function AppSidebar({ navKey, permissions, title, user }: AppSidebarProps
                       isActive={isActive(item.href)}
                       tooltip={label(item, locale)}
                     >
-                      <Link href={item.href}>
+                      <Link href={item.href} {...warm(item.href)}>
                         <item.icon />
                         <span>{label(item, locale)}</span>
                       </Link>
@@ -114,7 +122,7 @@ export function AppSidebar({ navKey, permissions, title, user }: AppSidebarProps
                           {item.items.map((sub) => (
                             <SidebarMenuSubItem key={sub.href}>
                               <SidebarMenuSubButton asChild isActive={pathname === sub.href}>
-                                <Link href={sub.href}>
+                                <Link href={sub.href} {...warm(sub.href)}>
                                   <span>{label(sub, locale)}</span>
                                 </Link>
                               </SidebarMenuSubButton>
@@ -134,7 +142,7 @@ export function AppSidebar({ navKey, permissions, title, user }: AppSidebarProps
                     isActive={isActive(item.href)}
                     tooltip={label(item, locale)}
                   >
-                    <Link href={item.href}>
+                    <Link href={item.href} {...warm(item.href)}>
                       <item.icon />
                       <span>{label(item, locale)}</span>
                     </Link>

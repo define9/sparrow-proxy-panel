@@ -108,6 +108,29 @@ docker compose exec -T postgres pg_restore -U sparrow -d sparrow --clean --if-ex
 
 > `deploy/.env` 里的 `MASTER_KEY` 加密了节点密钥/插件密钥，**必须单独备份**（密码管理器），它不在数据库里；丢了节点要重新注册。
 
+## 5.5 境外访问优化
+
+面板是 CSR + API 的形态，**每次点菜单 = 下载 chunk + 一次 API 往返**。高 RTT 下体感差别很大，已经做的优化：
+
+| 手段 | 位置 | 效果 |
+|---|---|---|
+| 菜单悬停预取 | `lib/api/prefetch.ts` + 侧边栏 `onMouseEnter` | 悬停时就预取路由 chunk 与该页首个列表请求，点击基本瞬开 |
+| 路由级骨架 | `app/(admin)/admin/loading.tsx` 等 | chunk 未到时立刻有骨架，不是白屏 |
+| 查询缓存 | `providers.tsx`：`staleTime 60s` / `gcTime 10min` | 切回已看过的菜单先用缓存渲染，后台再刷新 |
+| 列表保留旧数据 | `placeholderData: previous` | 换筛选条件不再整块闪骨架 |
+| 静态资源长缓存 | `Caddyfile`：`/_next/static/*` immutable | 二次访问不再重复下载 |
+| 压缩 | `Caddyfile`：`encode zstd gzip` | 文本资源体积降 60-80% |
+
+还可以加的（按性价比）：
+
+1. **CDN**（Cloudflare 等）只缓存 `/_next/static/*` 与 `/public/*`，`/api/*` 与 `/sub/*` 设 bypass。静态资源就近回源，境外首屏能快 200-500ms。
+2. **面板与数据库放在离用户近的区域**：RTT 是物理距离决定的，新加坡/香港节点比欧美快得多。
+3. **HTTP/3**：Caddy 在 TLS 下默认启用 h3，确认 compose 映射了 `443/udp`（已映射），弱网下丢包恢复更快。
+
+测一下瓶颈在哪：浏览器 DevTools → Network，看点击菜单后那两条请求的 **Waiting (TTFB)**：
+- 静态 chunk 慢 → CDN/region
+- `/api/v1/...` 慢 → 数据库或面板 CPU，看 `docker compose logs panel`
+
 ## 6. 换掉内置 Caddy
 
 已有 Nginx/Traefik，或者要挂到已有反代后面：
