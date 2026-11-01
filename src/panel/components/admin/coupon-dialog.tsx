@@ -15,7 +15,7 @@ import {
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { couponTypeLabels, type CouponType } from '@/lib/mock/admin-ops'
+import type { CouponType } from '@/lib/mock/admin-ops'
 
 export interface NewCouponInput {
   code: string

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -37,14 +37,15 @@ export function GroupEditDialog({ group, onOpenChange, onSave }: GroupEditDialog
   const [remark, setRemark] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  useEffect(() => {
-    if (!group) return
-    setName(group.name)
-    setRegion(group.region)
-    setLatency(String(group.avgLatency))
-    setRemark(group.remark)
+  const [editingId, setEditingId] = useState(group?.id ?? null)
+  if ((group?.id ?? null) !== editingId) {
+    setEditingId(group?.id ?? null)
+    setName(group?.name ?? '')
+    setRegion(group?.region ?? '')
+    setLatency(String(group?.avgLatency ?? 0))
+    setRemark(group?.remark ?? '')
     setErrors({})
-  }, [group])
+  }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()

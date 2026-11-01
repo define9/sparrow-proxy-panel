@@ -33,6 +33,8 @@ export function DataTable<TData>({
   emptyDescription,
   onRowClick
 }: DataTableProps<TData>) {
+  // TanStack Table 的 API 不满足 React Compiler 的 memo 假设，这里显式关闭该文件的编译检查
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() })
 
   if (data.length === 0) {

@@ -4,7 +4,7 @@ import type { Order, OrderStatus } from '@sparrow/contracts'
 import { CheckCircle2, CircleDollarSign, CreditCard, RotateCcw, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import {
   Sheet,

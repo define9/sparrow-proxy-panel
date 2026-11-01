@@ -23,6 +23,10 @@ import {
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar'
 import { localeNames, locales, type Locale } from '@/i18n/config'
 
+function writeLocaleCookie(next: string) {
+  document.cookie = `NEXT_LOCALE=${next}; path=/; max-age=31536000; samesite=lax`
+}
+
 export function NavUser() {
   const t = useTranslations('userMenu')
   const ta = useTranslations('auth')
@@ -40,7 +44,7 @@ export function NavUser() {
   ]
 
   function switchLocale(next: Locale) {
-    document.cookie = `NEXT_LOCALE=${next}; path=/; max-age=31536000; samesite=lax`
+    writeLocaleCookie(next)
     startTransition(() => router.refresh())
   }
 

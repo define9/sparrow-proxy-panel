@@ -36,10 +36,10 @@ function finderCell(row: number, col: number): boolean | null {
 /** 演示用二维码占位图：由字符串确定性生成，不编码真实内容 */
 export function QrPreview({ value, className }: { value: string; className?: string }) {
   const cells = useMemo(() => {
-    let seed = hashString(value)
-    const next = () => {
-      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
-      return seed / 4294967296
+    const base = hashString(value)
+    const randomAt = (index: number) => {
+      const x = (Math.imul(base + index * 2654435761, 1664525) + 1013904223) >>> 0
+      return x / 4294967296
     }
 
     return Array.from({ length: SIZE * SIZE }, (_, index) => {
@@ -47,7 +47,7 @@ export function QrPreview({ value, className }: { value: string; className?: str
       const col = index % SIZE
       const fixed = finderCell(row, col)
       if (fixed !== null) return fixed
-      return next() > 0.52
+      return randomAt(index) > 0.52
     })
   }, [value])
 
