@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Info, Plus } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -10,28 +10,42 @@ import { DataTable } from '@/components/common/data-table'
 import { PageHeader } from '@/components/common/page-header'
 import { PluginInstallDialog } from '@/components/admin/plugin-install-dialog'
 import { PluginSheet } from '@/components/admin/plugin-sheet'
+import { Skeleton } from '@/components/ui/skeleton'
 import { StateBadge } from '@/components/common/state-badge'
 import { FilterBar } from '@/components/admin/filter-bar'
-import { pluginTypeLabels, plugins, repoLabel, type AdminPlugin } from '@/lib/mock/admin-ops'
+import { useAdminPlugins, type PluginDto, type PluginType } from '@/lib/api/admin'
+
+const pluginTypeLabels: Record<PluginType, string> = {
+  payment: '支付',
+  node_source: '节点源',
+  subscription: '订阅',
+  notify: '通知',
+  hook: '钩子',
+  ui: '界面'
+}
+
+/** `owner/repo@sha 前 7 位` */
+function repoLabel(repoUrl: string, commitSha: string) {
+  const path = repoUrl.replace(/^https?:\/\/github\.com\//, '')
+  return `${path}@${commitSha.slice(0, 7)}`
+}
 
 export default function AdminPluginsPage() {
   const [search, setSearch] = useState('')
-  const [active, setActive] = useState<AdminPlugin | null>(null)
+  const [debounced, setDebounced] = useState('')
+  const [activeKey, setActiveKey] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [installOpen, setInstallOpen] = useState(false)
 
-  const data = useMemo(() => {
-    const keyword = search.trim().toLowerCase()
-    if (!keyword) return plugins
-    return plugins.filter(
-      (plugin) =>
-        plugin.name.toLowerCase().includes(keyword) ||
-        plugin.key.toLowerCase().includes(keyword) ||
-        plugin.repoUrl.toLowerCase().includes(keyword)
-    )
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(search.trim()), 300)
+    return () => clearTimeout(timer)
   }, [search])
 
-  const columns: ColumnDef<AdminPlugin>[] = [
+  const { data, isLoading, isError, error } = useAdminPlugins({ q: debounced })
+  const rows = data?.data ?? []
+
+  const columns: ColumnDef<PluginDto>[] = [
     {
       id: 'name',
       header: '名称',
@@ -85,7 +99,7 @@ export default function AdminPluginsPage() {
       id: 'jobs',
       header: '定时任务',
       cell: ({ row }) => (
-        <span className="font-mono text-sm tabular-nums">{row.original.jobs.length}</span>
+        <span className="font-mono text-sm tabular-nums">{row.original.jobCount ?? 0}</span>
       )
     },
     {
@@ -96,7 +110,7 @@ export default function AdminPluginsPage() {
           variant="ghost"
           size="sm"
           onClick={() => {
-            setActive(row.original)
+            setActiveKey(row.original.key)
             setSheetOpen(true)
           }}
         >
@@ -129,17 +143,23 @@ export default function AdminPluginsPage() {
       </Alert>
 
       <FilterBar search={search} onSearchChange={setSearch} placeholder="搜索插件名称、key 或仓库">
-        <span className="text-xs text-muted-foreground">共 {data.length} 个插件</span>
+        <span className="text-xs text-muted-foreground">共 {data?.meta.total ?? 0} 个插件</span>
       </FilterBar>
 
-      <DataTable
-        columns={columns}
-        data={data}
-        emptyTitle="没有匹配的插件"
-        emptyDescription="换个关键词，或点右上角「安装插件」"
-      />
+      {isLoading ? (
+        <Skeleton className="h-80 w-full" />
+      ) : isError ? (
+        <p className="text-sm text-destructive">加载失败：{(error as Error).message}</p>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={rows}
+          emptyTitle="没有匹配的插件"
+          emptyDescription="换个关键词，或点右上角「安装插件」"
+        />
+      )}
 
-      <PluginSheet plugin={active} open={sheetOpen} onOpenChange={setSheetOpen} />
+      <PluginSheet pluginKey={activeKey} open={sheetOpen} onOpenChange={setSheetOpen} />
       <PluginInstallDialog open={installOpen} onOpenChange={setInstallOpen} />
     </>
   )

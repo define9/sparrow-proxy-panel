@@ -1,60 +1,49 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Info, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { Info, Plus } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DataTable } from '@/components/common/data-table'
 import { FilterBar } from '@/components/admin/filter-bar'
 import { PageHeader } from '@/components/common/page-header'
-import { PluginSourceDialog, type NewSourceInput } from '@/components/admin/plugin-source-dialog'
-import { StateBadge } from '@/components/common/state-badge'
-import { Switch } from '@/components/ui/switch'
-import { formatDate } from '@/lib/format'
 import {
-  pluginSources,
-  pluginSourceTypeLabels,
-  type PluginSource
-} from '@/lib/mock/admin-ops'
+  PluginSourceDialog,
+  type NewSourceInput,
+  type SourceType
+} from '@/components/admin/plugin-source-dialog'
+import { Skeleton } from '@/components/ui/skeleton'
+import { StateBadge } from '@/components/common/state-badge'
+import { formatDate } from '@/lib/format'
+import { useCreatePluginSource, usePluginSources, type PluginSourceDto } from '@/lib/api/admin'
+
+const pluginSourceTypeLabels: Record<SourceType, string> = {
+  url: 'HTTP JSON',
+  git: 'Git 仓库',
+  marketplace: '官方市场'
+}
 
 export default function AdminPluginSourcesPage() {
-  const [items, setItems] = useState<PluginSource[]>(pluginSources)
   const [search, setSearch] = useState('')
+  const [debounced, setDebounced] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  const data = useMemo(() => {
-    const keyword = search.trim().toLowerCase()
-    if (!keyword) return items
-    return items.filter(
-      (source) => source.name.toLowerCase().includes(keyword) || source.url.toLowerCase().includes(keyword)
-    )
-  }, [items, search])
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(search.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [search])
 
-  function toggle(id: string, enabled: boolean) {
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, enabled } : item)))
-    toast.success(enabled ? '索引源已启用' : '索引源已停用')
+  const { data, isLoading, isError, error } = usePluginSources({ q: debounced })
+  const createSource = useCreatePluginSource()
+  const rows = data?.data ?? []
+
+  async function handleCreate(input: NewSourceInput) {
+    await createSource.mutateAsync(input)
   }
 
-  function handleCreate(input: NewSourceInput) {
-    setItems((current) => [
-      {
-        id: `src_${Date.now()}`,
-        name: input.name,
-        type: input.type,
-        url: input.url,
-        enabled: input.enabled,
-        lastSyncedAt: input.enabled ? new Date().toISOString() : null,
-        status: input.enabled ? 'healthy' : 'unknown',
-        entries: 0
-      },
-      ...current
-    ])
-  }
-
-  const columns: ColumnDef<PluginSource>[] = [
+  const columns: ColumnDef<PluginSourceDto>[] = [
     { accessorKey: 'name', header: '名称' },
     {
       accessorKey: 'type',
@@ -78,13 +67,12 @@ export default function AdminPluginSourcesPage() {
     {
       id: 'enabled',
       header: '启用',
-      cell: ({ row }) => (
-        <Switch
-          checked={row.original.enabled}
-          onCheckedChange={(checked) => toggle(row.original.id, checked)}
-          aria-label={`${row.original.name} 启用开关`}
-        />
-      )
+      cell: ({ row }) =>
+        row.original.enabled ? (
+          <Badge variant="success">已启用</Badge>
+        ) : (
+          <Badge variant="secondary">已停用</Badge>
+        )
     },
     {
       accessorKey: 'lastSyncedAt',
@@ -99,45 +87,9 @@ export default function AdminPluginSourcesPage() {
       cell: ({ row }) => (
         <div className="flex flex-col gap-1">
           <StateBadge status={row.original.status} />
-          {row.original.message ? (
-            <span className="text-xs text-muted-foreground">{row.original.message}</span>
+          {row.original.lastError ? (
+            <span className="text-xs text-muted-foreground">{row.original.lastError}</span>
           ) : null}
-        </div>
-      )
-    },
-    {
-      id: 'actions',
-      header: '操作',
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setItems((current) =>
-                current.map((item) =>
-                  item.id === row.original.id
-                    ? { ...item, lastSyncedAt: new Date().toISOString(), status: 'healthy', message: undefined }
-                    : item
-                )
-              )
-              toast.success(`已同步「${row.original.name}」`)
-            }}
-          >
-            <RefreshCw data-icon="inline-start" />
-            同步
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setItems((current) => current.filter((item) => item.id !== row.original.id))
-              toast.success(`已删除「${row.original.name}」`)
-            }}
-          >
-            <Trash2 data-icon="inline-start" />
-            删除
-          </Button>
         </div>
       )
     }
@@ -165,10 +117,21 @@ export default function AdminPluginSourcesPage() {
       </Alert>
 
       <FilterBar search={search} onSearchChange={setSearch} placeholder="搜索索引源名称或地址">
-        <span className="text-xs text-muted-foreground">共 {data.length} 个源</span>
+        <span className="text-xs text-muted-foreground">共 {data?.meta.total ?? 0} 个源</span>
       </FilterBar>
 
-      <DataTable columns={columns} data={data} emptyTitle="暂无索引源" emptyDescription="新建一个源开始发现插件" />
+      {isLoading ? (
+        <Skeleton className="h-80 w-full" />
+      ) : isError ? (
+        <p className="text-sm text-destructive">加载失败：{(error as Error).message}</p>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={rows}
+          emptyTitle="暂无索引源"
+          emptyDescription="新建一个源开始发现插件"
+        />
+      )}
 
       <PluginSourceDialog open={dialogOpen} onOpenChange={setDialogOpen} onSubmit={handleCreate} />
     </>

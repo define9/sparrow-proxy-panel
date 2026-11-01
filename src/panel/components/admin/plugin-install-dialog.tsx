@@ -18,7 +18,16 @@ import {
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
-import { pluginTypeLabels, type PluginType } from '@/lib/mock/admin-ops'
+import { useInstallPlugin, type PluginType } from '@/lib/api/admin'
+
+const pluginTypeLabels: Record<PluginType, string> = {
+  payment: '支付',
+  node_source: '节点源',
+  subscription: '订阅',
+  notify: '通知',
+  hook: '钩子',
+  ui: '界面'
+}
 
 interface PluginPreview {
   key: string
@@ -69,6 +78,9 @@ export function PluginInstallDialog({ open, onOpenChange }: PluginInstallDialogP
   const [preview, setPreview] = useState<PluginPreview | null>(null)
   const [granted, setGranted] = useState<string[]>([])
   const [confirmed, setConfirmed] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [serverError, setServerError] = useState<string | null>(null)
+  const install = useInstallPlugin()
 
   const urlError =
     repoUrl.trim() && !/^https:\/\/[\w.-]+\/[\w.-]+\/[\w.-]+(?:[?#].*)?$/.test(repoUrl.trim())
@@ -81,6 +93,8 @@ export function PluginInstallDialog({ open, onOpenChange }: PluginInstallDialogP
     setPreview(null)
     setGranted([])
     setConfirmed(false)
+    setSubmitting(false)
+    setServerError(null)
   }
 
   function handleOpenChange(next: boolean) {
@@ -94,7 +108,24 @@ export function PluginInstallDialog({ open, onOpenChange }: PluginInstallDialogP
     setPreview(next)
     setGranted(next.permissions)
     setConfirmed(false)
+    setServerError(null)
     setStep('preview')
+  }
+
+  async function handleInstall() {
+    if (!preview) return
+    setSubmitting(true)
+    setServerError(null)
+    try {
+      await install.mutateAsync({ repoUrl: repoUrl.trim() })
+      toast.success(`已提交安装任务：${preview.key}@${preview.version}`)
+      handleOpenChange(false)
+    } catch (error) {
+      setServerError((error as Error).message)
+      toast.error((error as Error).message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const allGranted = preview ? granted.length === preview.permissions.length : false
@@ -232,18 +263,20 @@ export function PluginInstallDialog({ open, onOpenChange }: PluginInstallDialogP
               )}
             </div>
 
+            {serverError ? (
+              <Alert variant="destructive">
+                <ShieldAlert data-icon="inline-start" />
+                <AlertTitle>安装未执行</AlertTitle>
+                <AlertDescription>{serverError}</AlertDescription>
+              </Alert>
+            ) : null}
+
             <DialogFooter>
-              <Button variant="outline" onClick={() => setStep('url')}>
+              <Button variant="outline" onClick={() => setStep('url')} disabled={submitting}>
                 上一步
               </Button>
-              <Button
-                disabled={!canInstall}
-                onClick={() => {
-                  toast.success(`已提交安装任务：${preview.key}@${preview.version}`)
-                  handleOpenChange(false)
-                }}
-              >
-                确认安装
+              <Button disabled={!canInstall || submitting} onClick={handleInstall}>
+                {submitting ? '提交中…' : '确认安装'}
               </Button>
             </DialogFooter>
           </>

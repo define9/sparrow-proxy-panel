@@ -4,16 +4,23 @@ import { Badge } from '@/components/ui/badge'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { formatDate } from '@/lib/format'
-import { logCategoryLabels, type AdminLogEntry, type LogLevel } from '@/lib/mock/admin-ops'
+import type { AdminLogDto } from '@/lib/api/admin'
 
-const levelMeta: Record<LogLevel, { variant: 'info' | 'warning' | 'destructive'; label: string }> = {
+const levelMeta = {
   info: { variant: 'info', label: 'INFO' },
   warn: { variant: 'warning', label: 'WARN' },
   error: { variant: 'destructive', label: 'ERROR' }
+} as const
+
+const categoryLabels: Record<AdminLogDto['category'], string> = {
+  audit: '审计',
+  login: '登录',
+  task: '任务',
+  agent: '节点事件'
 }
 
 interface LogSheetProps {
-  log: AdminLogEntry | null
+  log: AdminLogDto | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -40,7 +47,7 @@ export function LogSheet({ log, open, onOpenChange }: LogSheetProps) {
             </Field>
             <Field>
               <FieldLabel>分类</FieldLabel>
-              <p className="text-sm">{logCategoryLabels[log.category]}</p>
+              <p className="text-sm">{categoryLabels[log.category]}</p>
             </Field>
             <Field>
               <FieldLabel>操作者</FieldLabel>
