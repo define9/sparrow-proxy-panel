@@ -58,6 +58,21 @@ func (c *Collector) Reset() {
 	c.last = map[int]model.UserStat{}
 }
 
+// MaxBacklog 是本地待补报流量的条目上限（按 uid 聚合后），超出丢弃最旧的。
+const MaxBacklog = 5000
+
+// TrimBacklog 在条目超过 limit 时丢弃最旧的部分，返回保留的切片与被丢弃的条数。
+// 入参切片顺序即时间顺序：越靠前越旧。
+func TrimBacklog(items []model.TrafficItem, limit int) ([]model.TrafficItem, int) {
+	if limit <= 0 || len(items) <= limit {
+		return items, 0
+	}
+	drop := len(items) - limit
+	kept := make([]model.TrafficItem, limit)
+	copy(kept, items[drop:])
+	return kept, drop
+}
+
 // Merge 合并两批增量（同 uid 相加），用于把失败重报的缓存拼回本次上报。
 func Merge(batches ...[]model.TrafficItem) []model.TrafficItem {
 	agg := map[int]model.TrafficItem{}

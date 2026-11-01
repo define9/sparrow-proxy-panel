@@ -160,13 +160,8 @@ func cmdStatus(args []string) error {
 	if err != nil {
 		return err
 	}
-	out := map[string]any{
-		"registered": cfg.Registered(),
-		"panel":      cfg.Panel.URL,
-		"nodeId":     cfg.Panel.NodeID,
-		"core":       cfg.Core.Type,
-		"agent":      model.Version,
-	}
+	// 不连面板：只读 data_dir/state.json + 探测内核进程，面板不可达时也能用。
+	out := agent.LocalStatus(cfg)
 	encoded, _ := json.MarshalIndent(out, "", "  ")
 	fmt.Println(string(encoded))
 	return nil

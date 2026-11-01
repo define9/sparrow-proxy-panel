@@ -71,7 +71,8 @@ func (p *processCore) Apply(ctx context.Context, config []byte) error {
 		p.rollback()
 		return fmt.Errorf("配置校验失败: %w", err)
 	}
-	return p.Restart(ctx)
+	// 已经持有 p.mu，必须走 locked 版本，否则会自锁死。
+	return p.restartLocked()
 }
 
 func (p *processCore) rollback() {
