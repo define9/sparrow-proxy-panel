@@ -52,11 +52,13 @@ sudo ./up.sh --domain panel.example.com
 ### 起来了什么
 
 ```
-caddy            80/443     容器内 caddy：自动签证书、反代 panel
-panel            (内部3000)  Next standalone，不映射宿主端口
-postgres         (内部5432)  PostgreSQL 17，不映射宿主端口
+postgres         内部 5432   PostgreSQL 17，不映射宿主端口
 migrate          一次性      跑完 exited(0)，panel 等它成功才启动
+panel            127.0.0.1:3000  Next standalone，只监听宿主回环
+caddy（可选）     80/443      内置反代：自动签证书
 ```
+
+`caddy` 在 compose 的 `edge` profile 里，`./up.sh` 默认带上；加 `--no-caddy` 就不启动它。
 
 ## 3. 首次初始化
 
@@ -130,6 +132,59 @@ docker compose exec -T postgres pg_restore -U sparrow -d sparrow --clean --if-ex
 测一下瓶颈在哪：浏览器 DevTools → Network，看点击菜单后那两条请求的 **Waiting (TTFB)**：
 - 静态 chunk 慢 → CDN/region
 - `/api/v1/...` 慢 → 数据库或面板 CPU，看 `docker compose logs panel`
+
+## 5.6 用机器上已有的统一 Caddy（只跑数据库 + 面板）
+
+一台机器要跑多个站点、已经有 Caddy 在管证书时，不需要我们内置的那个：
+
+```bash
+cd /opt/sparrow/app/deploy
+sudo ./up.sh --no-caddy --domain panel.example.com
+```
+
+这样只启动 `postgres + migrate + panel`，面板监听 **127.0.0.1:3000**（不对外），
+由你现有的 Caddy 反代过去。往 `/etc/caddy/Caddyfile` 里加一段即可
+（完整示例见 `deploy/external-caddy.snippet`）：
+
+```caddyfile
+panel.example.com {
+	encode zstd gzip
+	@static path /_next/static/*
+	header @static Cache-Control "public, max-age=31536000, immutable"
+	reverse_proxy 127.0.0.1:3000 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+	}
+}
+```
+
+```bash
+sudo systemctl reload caddy
+curl -sI https://panel.example.com/api/v1/public/status   # 200
+```
+
+要点：
+
+| 项 | 说明 |
+|---|---|
+| 端口冲突 | 3000 被占时在 `deploy/.env` 设 `PANEL_PORT=13000`，Caddy 同步改 |
+| 证书 | 完全由你现有的 Caddy 负责，面板内的 caddy 不启动、不占 80/443 |
+| `NEXT_PUBLIC_SITE_URL` | 仍然要写 `https://你的域名`（订阅链接、回调地址都用它） |
+| 两种模式互斥 | 想切回内置 caddy：`./up.sh`（不加 `--no-caddy`）会启动 caddy 并占 80/443，记得先停掉系统里那个 |
+
+**Nginx 同理**，核心就一行：
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
 
 ## 6. 换掉内置 Caddy
 

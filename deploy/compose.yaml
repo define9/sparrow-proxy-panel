@@ -58,9 +58,13 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 3
-    # 不映射端口：只由 caddy 反代
+    # 只绑定宿主回环：外部 Caddy/Nginx 反代到这里；内置 caddy 也走它
+    ports:
+      - "127.0.0.1:${PANEL_PORT:-3000}:3000"
 
+  # 可选：机器上没有统一反代时启用（--profile edge）
   caddy:
+    profiles: ["edge"]
     image: caddy:2-alpine
     restart: unless-stopped
     ports:

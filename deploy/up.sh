@@ -10,6 +10,7 @@
 #   ./up.sh                                  # 默认纯 HTTP(:80)，无域名时用
 #   ./up.sh --domain panel.example.com       # 有域名：自动申请证书
 #   ./up.sh --domain panel.example.com --email me@example.com
+#   ./up.sh --no-caddy                       # 只跑 DB + 面板（端口 127.0.0.1:3000），反代用机器上已有的
 #   ./up.sh --pull                           # 先 git pull 再构建
 #   ./up.sh --no-build                       # 不重建镜像，只重启
 #   ./up.sh --down                           # 停止
@@ -23,6 +24,7 @@ DOMAIN=""
 EMAIL=""
 DO_BUILD=1
 DO_PULL=0
+EDGE=1          # 1 = 内置 caddy（compose profile: edge）；0 = 只跑数据库 + 面板
 ACTION="up"
 
 log()  { printf '\033[32m→\033[0m %s\n' "$*"; }
@@ -35,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     --email)  EMAIL="${2:?}"; shift 2 ;;
     --no-build) DO_BUILD=0; shift ;;
     --pull) DO_PULL=1; shift ;;
+    --no-caddy) EDGE=0; shift ;;
     --down) ACTION="down"; shift ;;
     -h|--help) sed -n '2,18p' "$SELF"; exit 0 ;;
     *) die "未知参数: $1（--help 查看用法）" ;;
@@ -70,9 +73,12 @@ fi
 
 "${DOCKER[@]}" compose version >/dev/null 2>&1 || die "缺少 compose 插件：sudo apt install docker-compose-plugin"
 
+COMPOSE_ARGS=()
+[[ "$EDGE" -eq 1 ]] && COMPOSE_ARGS+=(--profile edge)
+
 if [[ "$ACTION" = "down" ]]; then
   log "停止服务（数据保留在 volume 里）"
-  "${DOCKER[@]}" compose down
+  "${DOCKER[@]}" compose ${COMPOSE_ARGS[@]+"${COMPOSE_ARGS[@]}"} down
   exit 0
 fi
 
@@ -151,10 +157,10 @@ fi
 # ---------- 2. compose ----------
 if [[ "$DO_BUILD" -eq 1 ]]; then
   log "构建并启动（首次 3-8 分钟）"
-  "${DOCKER[@]}" compose up -d --build
+  "${DOCKER[@]}" compose ${COMPOSE_ARGS[@]+"${COMPOSE_ARGS[@]}"} up -d --build
 else
   log "跳过构建，直接启动"
-  "${DOCKER[@]}" compose up -d
+  "${DOCKER[@]}" compose ${COMPOSE_ARGS[@]+"${COMPOSE_ARGS[@]}"} up -d
 fi
 
 # ---------- 3. 等健康 ----------
@@ -176,8 +182,9 @@ for i in $(seq 1 80); do
   fi
 done
 
-# ---------- 4. caddy 自检 ----------
+# ---------- 4. caddy 自检（仅内置 caddy 模式） ----------
 sleep 3
+if [[ "$EDGE" -eq 1 ]]; then
 CADDY_STATUS="$("${DOCKER[@]}" compose ps --format '{{.Service}} {{.Status}}' 2>/dev/null | grep '^caddy ' || true)"
 if grep -qiE 'restarting|exited' <<<"$CADDY_STATUS"; then
   warn "caddy 异常：$CADDY_STATUS"
@@ -192,6 +199,7 @@ if grep -qiE 'restarting|exited' <<<"$CADDY_STATUS"; then
     3) .env 里 SITE_DOMAIN 为空或格式不对（应为 panel.example.com 或 :80）
 TIP
 fi
+fi
 
 echo
 "${DOCKER[@]}" compose ps
@@ -205,3 +213,8 @@ echo "  日志： ${DOCKER[*]} compose logs -f panel"
 echo "  重启： ${DOCKER[*]} compose restart panel"
 echo "  停止： ./up.sh --down"
 echo "  升级： cd .. && git pull && ./deploy/up.sh"
+if [[ "$EDGE" -eq 0 ]]; then
+  echo
+  echo "  外部反代（机器上统一的 Caddy）指向：127.0.0.1:${PANEL_PORT:-3000}"
+  echo "    https://你的域名 { reverse_proxy 127.0.0.1:${PANEL_PORT:-3000} }"
+fi
