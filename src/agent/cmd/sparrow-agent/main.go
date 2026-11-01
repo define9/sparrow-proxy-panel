@@ -112,19 +112,25 @@ func cmdRun(args []string) error {
 func cmdRegister(args []string) error {
 	fs := flag.NewFlagSet("register", flag.ExitOnError)
 	path := fs.String("c", defaultConfigPath, "配置文件路径")
-	panelURL := fs.String("url", "", "面板地址，如 https://panel.example.com")
+	panelURL := fs.String("url", "", "面板地址（省略时用配置文件里 panel.url）")
 	token := fs.String("token", "", "管理端生成的一次性注册令牌")
 	_ = fs.Parse(args)
 
-	if *panelURL == "" || *token == "" {
-		return fmt.Errorf("--url 与 --token 都是必填")
+	if *token == "" {
+		return fmt.Errorf("--token 是必填（面板「节点管理 → 新建节点」里的一次性令牌）")
 	}
 
 	cfg, err := config.Load(*path)
 	if err != nil {
 		return err
 	}
-	cfg.Panel.URL = *panelURL
+	// --url 可省略：配置文件里已写 panel.url 时直接复用
+	if *panelURL != "" {
+		cfg.Panel.URL = *panelURL
+	}
+	if cfg.Panel.URL == "" {
+		return fmt.Errorf("缺少面板地址：加 --url https://你的面板域名，或在 %s 里设置 panel.url", cfg.Path())
+	}
 
 	hostname, _ := os.Hostname()
 	c := client.New(cfg.Panel.URL, "", "", nil)

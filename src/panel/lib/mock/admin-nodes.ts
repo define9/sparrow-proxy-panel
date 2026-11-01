@@ -221,7 +221,8 @@ export function registerToken(node: Node) {
   return `sp_reg_${node.id.replace('node_', '')}a1b2c3d4`
 }
 
-export function registerCommand(node: Node, panelUrl = 'https://panel.example.com') {
+/** @param panelUrl 必须传真实面板地址（如 window.location.origin），不要留占位符 */
+export function registerCommand(node: Node, panelUrl: string) {
   return [
     `sparrow-agent register \\`,
     `  --url ${panelUrl} \\`,

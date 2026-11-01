@@ -48,7 +48,11 @@ const TLS_LABEL: Record<AdminNode['tlsMode'], string> = {
 
 const PAGE_SIZE = 20
 
-const REGISTER_TEMPLATE = 'sparrow-agent register --url https://panel.example.com --token <一次性令牌>'
+/** 用当前站点地址生成示例命令，避免文档占位符被当成真值 */
+function registerTemplate() {
+  const origin = typeof window === 'undefined' ? '' : window.location.origin
+  return `sparrow-agent register --url ${origin} --token <一次性令牌>`
+}
 
 export default function AdminNodesPage() {
   const queryClient = useQueryClient()
@@ -256,11 +260,11 @@ export default function AdminNodesPage() {
             在节点服务器安装 sparrow-agent 后执行注册命令，Agent 会自动拉取配置并在 30 秒内上线。
           </span>
           <code className="mt-1 w-fit max-w-full overflow-x-auto rounded bg-muted px-2 py-1 font-mono text-xs">
-            {REGISTER_TEMPLATE}
+            {registerTemplate()}
           </code>
         </AlertDescription>
         <AlertAction>
-          <CopyButton value={REGISTER_TEMPLATE} label="复制命令" />
+          <CopyButton value={registerTemplate()} label="复制命令" />
         </AlertAction>
       </Alert>
 
