@@ -22,7 +22,8 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  SidebarRail
+  SidebarRail,
+  useSidebar
 } from '@/components/ui/sidebar'
 import { NavUser } from '@/components/layout/nav-user'
 import type { SessionUser } from '@/lib/auth/types'
@@ -38,6 +39,9 @@ interface AppSidebarProps {
 export function AppSidebar({ navKey, permissions, title, user }: AppSidebarProps) {
   const pathname = usePathname()
   const locale = useLocale()
+  const { state, isMobile } = useSidebar()
+  const collapsed = state === 'collapsed' && !isMobile
+
   const visible = filterNav(navKey === 'admin' ? adminNav : userNav, permissions)
 
   const isActive = (href: string) =>
@@ -48,15 +52,17 @@ export function AppSidebar({ navKey, permissions, title, user }: AppSidebarProps
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild size="lg">
+            <SidebarMenuButton asChild size="lg" tooltip={collapsed ? 'Sparrow Panel' : undefined}>
               <Link href="/">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                   <Radio className="size-4" />
                 </div>
-                <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">Sparrow</span>
-                  <span className="text-xs text-muted-foreground">{title}</span>
-                </div>
+                {collapsed ? null : (
+                  <div className="grid flex-1 text-left leading-tight">
+                    <span className="truncate font-semibold">Sparrow</span>
+                    <span className="truncate text-xs text-muted-foreground">{title}</span>
+                  </div>
+                )}
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -65,35 +71,63 @@ export function AppSidebar({ navKey, permissions, title, user }: AppSidebarProps
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>{title}</SidebarGroupLabel>
+          {collapsed ? null : <SidebarGroupLabel>{title}</SidebarGroupLabel>}
           <SidebarMenu>
-            {visible.map((item) =>
-              item.items?.length ? (
-                <Collapsible key={item.href} asChild defaultOpen className="group/collapsible">
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton tooltip={label(item, locale)}>
+            {visible.map((item) => {
+              // 折叠成图标时，分组父项退化为普通链接（点击进入该组的首页），
+              // 否则点了没反应——子菜单在图标态也没地方展开。
+              if (item.items?.length && collapsed) {
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive(item.href)}
+                      tooltip={label(item, locale)}
+                    >
+                      <Link href={item.href}>
                         <item.icon />
                         <span>{label(item, locale)}</span>
-                        <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {item.items.map((sub) => (
-                          <SidebarMenuSubItem key={sub.href}>
-                            <SidebarMenuSubButton asChild isActive={pathname === sub.href}>
-                              <Link href={sub.href}>
-                                <span>{label(sub, locale)}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
+                      </Link>
+                    </SidebarMenuButton>
                   </SidebarMenuItem>
-                </Collapsible>
-              ) : (
+                )
+              }
+
+              if (item.items?.length) {
+                return (
+                  <Collapsible
+                    key={item.href}
+                    asChild
+                    defaultOpen
+                    className="group/collapsible"
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton tooltip={label(item, locale)}>
+                          <item.icon />
+                          <span>{label(item, locale)}</span>
+                          <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {item.items.map((sub) => (
+                            <SidebarMenuSubItem key={sub.href}>
+                              <SidebarMenuSubButton asChild isActive={pathname === sub.href}>
+                                <Link href={sub.href}>
+                                  <span>{label(sub, locale)}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                )
+              }
+
+              return (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     asChild
@@ -107,7 +141,7 @@ export function AppSidebar({ navKey, permissions, title, user }: AppSidebarProps
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )
-            )}
+            })}
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>

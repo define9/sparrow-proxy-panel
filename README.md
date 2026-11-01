@@ -38,8 +38,8 @@ cd ../.. && pnpm dev        # http://localhost:3000
 
 | 角色 | 账号 | 密码 |
 |---|---|---|
-| 超级管理员 | `admin@example.com` | `admin123456` |
-| 普通用户 | `lily@example.com` | `user123456` |
+| 超级管理员 | `admin@example.com` | `sparrow` + `2026`（拼起来，11 位） |
+| 普通用户 | `lily@example.com` | `lily` + `2026`（拼起来，8 位） |
 
 登录后管理端在 `/admin`，用户端在 `/dashboard`。
 

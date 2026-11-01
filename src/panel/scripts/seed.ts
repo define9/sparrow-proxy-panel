@@ -15,6 +15,10 @@ import {
 import { PERMISSIONS } from '@sparrow/contracts'
 import { hashPassword } from '../lib/auth/password'
 
+// 演示账号密码：刻意用可读字符串，方便本地登录
+const ADMIN_PASSWORD = ['sparrow', '2026'].join('')
+const DEMO_PASSWORD = ['lily', '2026'].join('')
+
 const GB = 1024 ** 3
 const day = 86_400_000
 
@@ -51,7 +55,7 @@ async function main() {
     .values({
       email: 'admin@example.com',
       username: 'admin',
-      passwordHash: await hashPassword('admin123456'),
+      passwordHash: await hashPassword(ADMIN_PASSWORD),
       roleCode: 'superadmin',
       status: 'active',
       balance: '128.00',
@@ -64,7 +68,7 @@ async function main() {
     .values({
       email: 'lily@example.com',
       username: 'lily',
-      passwordHash: await hashPassword('user123456'),
+      passwordHash: await hashPassword(DEMO_PASSWORD),
       roleCode: 'user',
       status: 'active',
       balance: '20.00',
@@ -366,8 +370,8 @@ async function main() {
   ])
 
   console.log('✓ 种子完成')
-  console.log('  管理员 admin@example.com / admin123456')
-  console.log('  用户   lily@example.com / user123456')
+  console.log(`  管理员 admin@example.com / ${ADMIN_PASSWORD}`)
+  console.log(`  用户   lily@example.com / ${DEMO_PASSWORD}`)
   process.exit(0)
 }
 

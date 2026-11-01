@@ -43,7 +43,8 @@ export function NavUser({ user }: { user: SessionUser }) {
   const ta = useTranslations('auth')
   const locale = useLocale() as Locale
   const router = useRouter()
-  const { isMobile } = useSidebar()
+  const { isMobile, state } = useSidebar()
+  const collapsed = state === 'collapsed' && !isMobile
   const { theme, setTheme } = useTheme()
   const [switching, startTransition] = useTransition()
   const [open, setOpen] = useState(false)
@@ -71,11 +72,13 @@ export function NavUser({ user }: { user: SessionUser }) {
               <Avatar className="size-8 rounded-lg">
                 <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.username}</span>
-                <span className="truncate text-xs text-muted-foreground">{user.email}</span>
-              </div>
-              <ChevronsUpDown className="ml-auto" />
+              {collapsed ? null : (
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-medium">{user.username}</span>
+                  <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                </div>
+              )}
+              {collapsed ? null : <ChevronsUpDown className="ml-auto" />}
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
