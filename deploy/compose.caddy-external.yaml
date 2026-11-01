@@ -59,8 +59,12 @@ services:
     volumes:
       # 由 deploy/build-agent.sh 产出；没有该目录时挂载为空，不影响启动
       - ./agent-dist:/app/src/panel/public/agent:ro
+    networks:
+      - default
+      # 与宿主上的 caddy 容器共享的对外网络，Caddy 里用 http://panel:3000
+      - edge
     ports:
-      # 只监听回环，交给宿主上的 Caddy 反代
+      # 同时保留回环端口：用于本机 curl 调试，或 Caddy 直接跑在宿主机上时
       - "127.0.0.1:${PANEL_PORT:-3000}:3000"
     depends_on:
       postgres:
@@ -73,6 +77,13 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 3
+
+networks:
+  # 已存在的共享网络（你的 caddy compose 里也需要加入同名网络）
+  # 创建：docker network create web
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:-web}
 
 volumes:
   sparrow-pgdata:

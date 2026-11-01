@@ -172,6 +172,50 @@ curl -sI https://panel.example.com/api/v1/public/status   # 200
 | `NEXT_PUBLIC_SITE_URL` | 仍然要写 `https://你的域名`（订阅链接、回调地址都用它） |
 | 两种模式互斥 | 想切回内置 caddy：`./up.sh`（不加 `--no-caddy`）会启动 caddy 并占 80/443，记得先停掉系统里那个 |
 
+### 5.6.1 Caddy 也跑在容器里（推荐做法）
+
+如果统一 Caddy 本身是容器（比如 `~/docker_root/caddy`），`127.0.0.1:3000` 在它眼里是容器自己，
+必须用 **docker 网络 + 服务名**互通：
+
+```bash
+# 1. 建一个共享网络（只需一次）
+docker network create web
+
+# 2. 你的 caddy compose 里加上它（示例）
+#    services:
+#      caddy:
+#        networks: [web]
+#    networks:
+#      web:
+#        external: true
+
+# 3. 本项目 compose 已经内置：panel 同时接入 default 与 web
+#    （网络名可用 EDGE_NETWORK 覆盖，默认 web）
+```
+
+然后站点配置里写 **`reverse_proxy panel:3000`**（容器名/DNS 名），
+模板见 `deploy/caddy-site-panel.conf`：
+
+```caddyfile
+panel.sparrowx.org {
+	encode zstd gzip
+
+	@static path /_next/static/*
+	header @static Cache-Control "public, max-age=31536000, immutable"
+
+	reverse_proxy panel:3000 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+	}
+}
+```
+
+> Caddyfile 语法硬性要求：`{` 必须在行尾、`}` 独占一行；`@matcher` 与指令都不能和 `{` 挤在同一行，
+> 否则会报 `Unexpected next token after '{' on same line`。
+> `import base` 这类片段也要写成 `(base) {` 独占一行，内容各自换行。
+
+**Caddy 跑在宿主机**（不是容器）时才用 `127.0.0.1:3000`。
+
 **Nginx 同理**，核心就一行：
 
 ```nginx
