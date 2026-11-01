@@ -4,7 +4,8 @@
 # 两个变量都带默认值：环境变量为空时不会生成非法配置（这是之前重启循环的原因）
 
 {
-	email {$ACME_EMAIL:ops@example.com}
+	# 必须非空：LET'S ENCRYPT 账号邮箱。compose 已兜底为 ops@example.com
+	email {$ACME_EMAIL}
 }
 
 {$SITE_DOMAIN::80} {

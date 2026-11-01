@@ -69,7 +69,7 @@ services:
       - "443:443/udp"
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN:?请在 deploy/.env 里设置 SITE_DOMAIN}
-      ACME_EMAIL: ${ACME_EMAIL:-}
+      ACME_EMAIL: ${ACME_EMAIL:-ops@example.com}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - sparrow-caddy-data:/data
