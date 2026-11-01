@@ -34,11 +34,13 @@
 | 14 | [frontend/i18n.md](frontend/i18n.md) | next-intl 方案、key 规范、CI 校验 |
 | 15 | [frontend/navigation.md](frontend/navigation.md) | 菜单与路由、权限过滤、命令面板、快捷键、守卫 |
 
-### 计划
+### 计划与运维
 
 | # | 文档 | 内容 |
 |---|---|---|
 | 16 | [roadmap.md](roadmap.md) | P0–P3、验收标准、风险登记 |
+| 17 | [deploy.md](deploy.md) | 部署总览：Docker Compose / 裸机 systemd、升级回滚、备份 |
+| 18 | [deploy-ubuntu.md](deploy-ubuntu.md) | **从空白 Ubuntu 开始**：要装什么、防火墙、swap、Caddy、首次初始化 |
 
 ## 已锁定的核心决策
 

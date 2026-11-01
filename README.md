@@ -14,6 +14,11 @@ deploy/             # docker compose（PostgreSQL）
 docs/               # 产品 / 架构 / 前端文档
 ```
 
+## 生产部署
+
+- 空白 Ubuntu 服务器从零开始：[docs/deploy-ubuntu.md](docs/deploy-ubuntu.md)（装 Docker + Caddy → 三条命令起站）
+- 部署总览与运维（Docker / 裸机 systemd、备份、升级回滚）：[docs/deploy.md](docs/deploy.md)
+
 ## 本地启动
 
 ```bash
