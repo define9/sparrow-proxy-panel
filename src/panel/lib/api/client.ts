@@ -38,7 +38,9 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (response.status === 401 && typeof window !== 'undefined') {
     const next = encodeURIComponent(window.location.pathname)
-    window.location.href = `/login?next=${next}`
+    // fetch 层拿不到 router，这里必须整页跳转；丢失登录态时不需要保留前端状态
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign(`/login?next=${next}`)
     throw new ApiClientError({ statusCode: 401, code: 'AUTH_REQUIRED', message: '请先登录' })
   }
 

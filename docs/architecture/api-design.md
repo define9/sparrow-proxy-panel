@@ -14,7 +14,7 @@
 
 ### 成功响应
 
-单对象直接返回；列表统一封装：
+单对象直接返回；**分页集合**统一封装：
 
 ```json
 {
@@ -22,6 +22,15 @@
   "meta": { "total": 128, "page": 1, "pageSize": 20, "hasMore": false }
 }
 ```
+
+两类例外，直接返回裸数组（没有分页语义）：
+
+| 场景 | 例子 |
+|---|---|
+| 固定规模的查询列表 | `GET /public/plans`、`GET /user/plans`、`GET /admin/node-groups` |
+| 时间序列 | `GET /user/traffic`、`GET /admin/stats/traffic` |
+
+判据：**会分页的用 `{ data, meta }`，不会分页的用数组**。前端 `apiFetch<ListResponse<T>>` 与 `apiFetch<T[]>` 分别对应。
 
 ### 错误响应
 
