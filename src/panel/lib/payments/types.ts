@@ -1,51 +1,33 @@
+import type { FieldSpec } from '@/lib/plugin-host/types'
+
 /**
- * 支付渠道声明式契约。
+ * 支付渠道的 HTTP 契约（对外字段不能变）。
  *
- * 每个渠道只声明「自己有哪些设置项」，管理端按 fields 自动渲染表单；
- * 新增渠道 = 在 registry.ts 里追加一条声明，不改页面与路由。
+ * 渠道声明不在本目录写死：来自 plugins 表里 type='payment' 的插件，
+ * manifest.configSchema 经 lib/plugin-host/schema.ts 转成 FieldSpec[]。
  */
 
-export type FieldType = 'text' | 'password' | 'url' | 'select'
+export type { FieldSpec, FieldType } from '@/lib/plugin-host/types'
 
-export interface FieldSpec {
-  /** 配置里的字段名（同时作为 settings.payment.gateways.<key>.config 的 key） */
-  key: string
-  label: string
-  type: FieldType
-  placeholder?: string
-  help?: string
-  required?: boolean
-  /** true 时回显为 MASK，提交 MASK / 空串表示保留原值 */
-  secret?: boolean
-  options?: { label: string; value: string }[]
-}
+/** secret 字段的回显占位符；提交同一占位符表示「保留原值」 */
+export const MASK = '••••'
 
+/** 渠道声明（只读视图，不含配置） */
 export interface GatewayDefinition {
-  /** 'epay' | 'stripe' */
+  /** 插件 key：payment-epay */
   key: string
-  /** 展示名 */
   name: string
   description: string
   docsUrl?: string
   fields: FieldSpec[]
-  /** 该渠道支持的支付方式（可选，前端展示用） */
+  /** 该渠道支持的支付方式（前端展示用） */
   methods?: { label: string; value: string }[]
-}
-
-/** settings.payment.gateways.<key> 的存储结构 */
-export interface GatewayConfig {
-  enabled: boolean
-  config: Record<string, string>
-}
-
-/** settings.payment 的存储结构 */
-export interface PaymentSettings {
-  default: string
-  gateways: Record<string, GatewayConfig>
 }
 
 /** 返回给管理端的渠道视图（secret 字段已脱敏） */
 export interface GatewayView extends GatewayDefinition {
+  /** 兼容前端已写好的短名：epay / stripe（= key 去掉 payment- 前缀） */
+  id: string
   enabled: boolean
   config: Record<string, string>
   /** 该渠道是否已经填过任意 secret 字段 */
@@ -57,6 +39,11 @@ export interface GatewayList {
   gateways: GatewayView[]
 }
 
+export interface GatewayPatch {
+  enabled?: boolean
+  config?: Record<string, unknown>
+}
+
 export interface GatewayTestCheck {
   name: string
   ok: boolean
@@ -66,6 +53,20 @@ export interface GatewayTestCheck {
 export interface GatewayTestResult {
   ok: boolean
   checks: GatewayTestCheck[]
+}
+
+/** 旧设置页的两个开关（settings 接口兼容视图） */
+export interface LegacyPaymentView {
+  epayEnabled: boolean
+  stripeEnabled: boolean
+}
+
+/** 旧设置接口提交的支付片段（含 epayEnabled / stripeEnabled） */
+export interface LegacyPaymentPatch {
+  epayEnabled?: boolean
+  stripeEnabled?: boolean
+  default?: string
+  gateways?: Record<string, GatewayPatch | undefined>
 }
 
 /** 下单支付应答里的模式：demo = 演示网关直接落定，gateway = 走已配置渠道 */
