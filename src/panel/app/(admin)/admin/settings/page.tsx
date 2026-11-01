@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CreditCard, Save, ShieldCheck } from 'lucide-react'
+import { Save, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import {
   normalizeMailSettings,
   serializeMailSettings
 } from '@/components/admin/mail-settings-form'
+import { PaymentGateways } from '@/components/admin/payment-gateways'
 import {
   useAdminSettings,
   useSaveSettings,
@@ -26,7 +27,7 @@ import {
 } from '@/lib/api/admin'
 import { allPermissionPoints, roleMatrix } from '@/lib/mock/admin-ops'
 
-type Section = 'site' | 'register' | 'payment' | 'mail'
+type Section = 'site' | 'register' | 'mail'
 type SaveMutation = ReturnType<typeof useSaveSettings>
 
 export default function AdminSettingsPage() {
@@ -59,7 +60,6 @@ export default function AdminSettingsPage() {
 function SettingsForm({ initial, save }: { initial: SettingsDto; save: SaveMutation }) {
   const [site, setSite] = useState<SettingsDto['site']>(initial.site)
   const [registration, setRegistration] = useState<SettingsDto['register']>(initial.register)
-  const [payment, setPayment] = useState<SettingsDto['payment']>(initial.payment)
   const [mail, setMail] = useState<MailSettingsDto>(() => normalizeMailSettings(initial.mail))
 
   function persist(label: string, body: Partial<SettingsDto>) {
@@ -72,7 +72,6 @@ function SettingsForm({ initial, save }: { initial: SettingsDto; save: SaveMutat
   function saveSection(section: Section, label: string) {
     if (section === 'site') persist(label, { site })
     if (section === 'register') persist(label, { register: registration })
-    if (section === 'payment') persist(label, { payment })
     if (section === 'mail') persist(label, { mail: serializeMailSettings(mail) })
   }
 
@@ -80,7 +79,6 @@ function SettingsForm({ initial, save }: { initial: SettingsDto; save: SaveMutat
     persist('系统设置', {
       site,
       register: registration,
-      payment,
       mail: serializeMailSettings(mail)
     })
   }
@@ -221,50 +219,7 @@ function SettingsForm({ initial, save }: { initial: SettingsDto; save: SaveMutat
         </TabsContent>
 
         <TabsContent value="payment" className="pt-4">
-          <div className="grid max-w-3xl gap-4">
-            <Card>
-              <CardHeader>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <CreditCard data-icon="inline-start" className="size-4 text-muted-foreground" />
-                    <CardTitle className="text-base">易支付</CardTitle>
-                    <Badge variant="outline">epay</Badge>
-                  </div>
-                  <Switch
-                    checked={payment.epayEnabled}
-                    aria-label="易支付启用开关"
-                    onCheckedChange={(checked) => setPayment({ ...payment, epayEnabled: checked })}
-                  />
-                </div>
-                <CardDescription>聚合网关渠道开关，商户密钥由支付插件配置。</CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <CreditCard data-icon="inline-start" className="size-4 text-muted-foreground" />
-                    <CardTitle className="text-base">Stripe</CardTitle>
-                    <Badge variant="outline">stripe</Badge>
-                  </div>
-                  <Switch
-                    checked={payment.stripeEnabled}
-                    aria-label="Stripe 启用开关"
-                    onCheckedChange={(checked) => setPayment({ ...payment, stripeEnabled: checked })}
-                  />
-                </div>
-                <CardDescription>Stripe 渠道开关，API Key 与 Webhook 由支付插件配置。</CardDescription>
-              </CardHeader>
-            </Card>
-
-            <div>
-              <Button onClick={() => saveSection('payment', '支付设置')} disabled={save.isPending}>
-                <Save data-icon="inline-start" />
-                保存支付设置
-              </Button>
-            </div>
-          </div>
+          <PaymentGateways />
         </TabsContent>
 
         <TabsContent value="email" className="pt-4">
