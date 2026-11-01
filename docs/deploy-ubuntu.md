@@ -154,6 +154,7 @@ sudo sparrow-agent doctor -c /etc/sparrow-agent/config.yaml
 | `/setup` 403 | 没填或填错 `SETUP_TOKEN`（值在 `deploy/.env`） |
 | 登录后又跳回登录页 | `NEXT_PUBLIC_SITE_URL` 与实际域名不一致 |
 | 构建时进程被杀 | 内存不足：`bash bootstrap.sh --swap` 后重跑 `./up.sh` |
-| 构建报 `ERR_PNPM_IGNORED_BUILDS` | 依赖的安装脚本被 pnpm 拦了；`pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 已放行构建必需的包，拉最新代码再构建 |
+| 构建报 `ERR_PNPM_IGNORED_BUILDS` | 依赖的安装脚本被 pnpm 拦了；Dockerfile 已改为 `--ignore-scripts` + 定向 `pnpm rebuild`，升级代码后重跑 `./up.sh` |
+| 改了配置但构建行为没变 | 服务器代码没更新：`./up.sh --pull`（或 `cd .. && sudo git pull`）后再构建 |
 | 重启机器后没起来 | `sudo systemctl enable docker`（compose 服务已设 `restart: unless-stopped`） |
 | 节点一直离线 | 节点上 `sparrow-agent doctor`；面板看节点是否已注册 |

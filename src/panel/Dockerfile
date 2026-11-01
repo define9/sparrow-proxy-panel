@@ -10,7 +10,11 @@ WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/contracts/package.json ./packages/contracts/
 COPY src/panel/package.json ./src/panel/
-RUN pnpm install --frozen-lockfile
+# pnpm 10+ 会拦截依赖的安装脚本，pnpm 12 更是把「存在被忽略的构建」直接判为错误。
+# 这里显式 --ignore-scripts 安装（不会失败），再只重建构建必需的几个二进制包。
+RUN pnpm install --frozen-lockfile --ignore-scripts \
+    && (pnpm rebuild esbuild @swc/core @parcel/watcher unrs-resolver \
+        || echo "[warn] 部分依赖的构建脚本执行失败，继续构建")
 
 # ---- 构建 ----
 FROM deps AS builder

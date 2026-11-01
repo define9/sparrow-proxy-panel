@@ -10,6 +10,7 @@
 #   ./up.sh                                  # 默认纯 HTTP(:80)，无域名时用
 #   ./up.sh --domain panel.example.com       # 有域名：自动申请证书
 #   ./up.sh --domain panel.example.com --email me@example.com
+#   ./up.sh --pull                           # 先 git pull 再构建
 #   ./up.sh --no-build                       # 不重建镜像，只重启
 #   ./up.sh --down                           # 停止
 # ============================================================
@@ -21,6 +22,7 @@ cd "$(dirname "$0")"
 DOMAIN=""
 EMAIL=""
 DO_BUILD=1
+DO_PULL=0
 ACTION="up"
 
 log()  { printf '\033[32m→\033[0m %s\n' "$*"; }
@@ -32,6 +34,7 @@ while [[ $# -gt 0 ]]; do
     --domain) DOMAIN="${2:?}"; shift 2 ;;
     --email)  EMAIL="${2:?}"; shift 2 ;;
     --no-build) DO_BUILD=0; shift ;;
+    --pull) DO_PULL=1; shift ;;
     --down) ACTION="down"; shift ;;
     -h|--help) sed -n '2,18p' "$SELF"; exit 0 ;;
     *) die "未知参数: $1（--help 查看用法）" ;;
@@ -71,6 +74,23 @@ if [[ "$ACTION" = "down" ]]; then
   log "停止服务（数据保留在 volume 里）"
   "${DOCKER[@]}" compose down
   exit 0
+fi
+
+# ---------- 0.5 代码是否最新 ----------
+GIT=(git -C .. -c safe.directory=*)
+if "${GIT[@]}" rev-parse --git-dir >/dev/null 2>&1; then
+  UPSTREAM="$("${GIT[@]}" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+  if [[ -n "$UPSTREAM" ]]; then
+    if [[ "$DO_PULL" -eq 1 ]]; then
+      log "拉取最新代码（$UPSTREAM）"
+      "${GIT[@]}" pull --ff-only || warn "git pull 失败，继续用当前代码"
+    else
+      BEHIND="$("${GIT[@]}" rev-list --count "HEAD..$UPSTREAM" 2>/dev/null || echo 0)"
+      if [[ "${BEHIND:-0}" -gt 0 ]]; then
+        warn "本地代码落后 $UPSTREAM $BEHIND 个提交；加 --pull 自动更新"
+      fi
+    fi
+  fi
 fi
 
 # ---------- 1. .env ----------
