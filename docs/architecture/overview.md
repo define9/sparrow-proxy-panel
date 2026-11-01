@@ -23,9 +23,12 @@
 │    ├─ api/v1/public   公开接口（缓存友好）                             │
 │    └─ sub/[token]      订阅输出（纯文本 route handler）                │
 │  lib/                                                                 │
-│    ├─ services/       业务服务层（页面与 route handler 共用）           │
-│    ├─ db/             Drizzle client                                   │
-│    └─ quota · auth · crypto · subscription · node · plugin-host        │
+│    ├─ services/       业务服务层（15 个域，页面与 route handler 共用）  │
+│    ├─ plugin-host/    内置插件注册表（payment-epay / payment-stripe）  │
+│    ├─ notify/         邮件 provider（resend / log）                    │
+│    ├─ payments/       支付渠道：plugins 表 + manifest.configSchema     │
+│    ├─ jobs/           定时任务（advisory lock）                        │
+│    └─ db/ · auth/ · subscription/ · agent/                             │
 │  instrumentation.ts   定时任务（node-cron）                            │
 │  packages/contracts   zod schema（唯一契约源）                         │
 └───────┬──────────────────────────────────────────────────────────────┘
@@ -110,9 +113,16 @@ Agent 上报 ──► 进程内存累加（Map<uid, {up, down}>）
 
 ```
 Caddy / Nginx（TLS、静态资源缓存）
-   └── Panel（Node 进程，systemd / Docker；next start）
-         └── PostgreSQL 17（同机或同内网）
+   └── Panel（容器，next standalone）
+         └── PostgreSQL 17（同机或同内网，仅在 compose 内网暴露）
 ```
+
+两种起法（见 [部署手册](../deploy-ubuntu.md)）：
+
+| 模式 | 组成 | 适用 |
+|---|---|---|
+| 内置反代 | `caddy + panel + postgres + migrate` | 独占一台机器 |
+| 外部反代 | `panel + postgres + migrate`，panel 发布到 `127.0.0.1:3000` | 机器上已有统一 Caddy/Nginx |
 
 扩容路径（按需触发，不预先建设）：
 

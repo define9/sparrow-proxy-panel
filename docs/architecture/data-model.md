@@ -339,6 +339,22 @@ id pk, name, type enum(url, git, marketplace), url text, enabled bool, last_sync
 | task_runs | id pk, name varchar(64), status enum(running, success, failed), started_at, finished_at, error text, meta jsonb |
 | webhooks | id pk, url, secret, events text[], enabled bool, created_at |
 
+
+### settings 的 key 约定
+
+`settings` 是唯一的「系统级键值」表，值为 JSON 字符串。当前使用的 key：
+
+| key | 内容 | 谁读写 |
+|---|---|---|
+| `site` | 站点名、Logo、公告、备案号 | 管理端「站点」Tab、公开接口 `/public/site` |
+| `register` | 开放注册、邮箱验证、赠送流量、邀请码 | 管理端「注册」Tab |
+| `mail` | `provider` + `resend`/`smtp` 配置 + `testTo`（密钥脱敏、`••••` 回写不覆盖） | [notify-providers](notify-providers.md) |
+| `payment` | 仅保留 `{ default: "payment-epay" }`；各渠道配置已迁到 `plugins.config` | 管理端「支付」Tab |
+| `setup` | 初始化标记（存在即视为已初始化，幂等防重复建超管） | `/api/v1/setup` |
+
+> 支付渠道的密钥字段由 `lib/plugin-host/secret.ts` 用 `MASTER_KEY` 派生密钥做 AES-256-GCM，
+> 落库形如 `v1$<sha256>$<iv>$<tag>$<ciphertext>`；接口回显一律 `••••`。
+
 ## 8. ER 概览
 
 ```

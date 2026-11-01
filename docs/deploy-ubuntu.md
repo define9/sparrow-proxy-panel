@@ -144,7 +144,7 @@ sudo ./up.sh --no-caddy --domain panel.example.com
 
 这样只启动 `postgres + migrate + panel`，面板监听 **127.0.0.1:3000**（不对外），
 由你现有的 Caddy 反代过去。往 `/etc/caddy/Caddyfile` 里加一段即可
-（完整示例见 `deploy/external-caddy.snippet`）：
+（完整示例见 `deploy/caddy-site-panel.conf`）：
 
 ```caddyfile
 panel.example.com {

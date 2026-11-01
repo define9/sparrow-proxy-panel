@@ -82,6 +82,20 @@
 └── ...             特殊路径见 §5
 ```
 
+### 1.1 已实现清单（71 个 handler，与本表逐条核对）
+
+| 域 | 已实现 |
+|---|---|
+| auth | `login` `logout` `me` `register` `email-code` `password/forgot` `password/reset` |
+| setup | `setup`（一次性初始化）、`setup/status` |
+| user | `overview` `plans` `plans/{id}` `orders` `orders/{no}` `orders/{no}/cancel` `orders/{no}/pay` `subscriptions` `subscriptions/{id}` `traffic` |
+| admin | `plans`(+`{id}`/`duplicate`) `orders`(+`{id}`/`complete`/`refund`) `subscriptions`(+`{id}`/`batch`) `nodes`(+`{id}`/`sync`) `node-groups` `node-certificates`(+`{id}`) `users`(+`{id}`/`balance`/`sessions`) `coupons`(+`{id}`) `logs/{audit,login,tasks,agent}` `settings` `settings/mail/test` `payment/gateways`(+`{key}`/`test`) `payment/default` `stats/{overview,traffic,revenue,nodes}` `jobs/{name}/run` `plugins`(+`{key}`/`jobs`) `plugin-sources` `plugins/install`（501，流水线未实现） |
+| agent | `register` `heartbeat` `config` `traffic` `commands` `commands/{id}/ack` |
+| public | `plans` `site` `status` |
+| 特殊 | `/sub/{token}`、`/sub/{token}/info` |
+
+> 下文表格里其余条目是**设计目标**（如 2FA、用户 profile、API Token、订阅设备管理），尚未实现。
+
 ---
 
 ## 2. 鉴权模型
@@ -130,12 +144,13 @@ METHOD \n PATH \n TIMESTAMP \n NONCE \n SHA256(body)
 | POST | `/api/v1/auth/register` | 注册（邮箱 + 密码 + 验证码） |
 | POST | `/api/v1/auth/login` | 登录 |
 | POST | `/api/v1/auth/logout` | 登出 |
-| POST | `/api/v1/auth/2fa/verify` | 2FA 校验（登录第二步） |
+| POST | `/api/v1/auth/email-code` | 发送邮箱验证码（注册/找回密码共用） |
+| POST | `/api/v1/auth/2fa/verify` | 2FA 校验（登录第二步，**未实现**） |
 | POST | `/api/v1/auth/password/forgot` | 找回密码（发邮件） |
 | POST | `/api/v1/auth/password/reset` | 重置密码 |
-| GET | `/api/v1/user/profile` | 个人信息 |
-| PATCH | `/api/v1/user/profile` | 修改资料 |
-| POST | `/api/v1/user/password` | 修改密码 |
+| GET | `/api/v1/user/profile` | 个人信息（**未实现**，个人设置页目前只读） |
+| PATCH | `/api/v1/user/profile` | 修改资料（**未实现**） |
+| POST | `/api/v1/user/password` | 修改密码（**未实现**） |
 | GET | `/api/v1/user/overview` | 首页概览（配额、到期、最近订单、公告） |
 | GET | `/api/v1/user/plans` | 可购买商品 |
 | GET | `/api/v1/user/plans/{id}` | 商品详情 |
@@ -207,6 +222,13 @@ METHOD \n PATH \n TIMESTAMP \n NONCE \n SHA256(body)
 | GET | `/admin/logs/tasks` | `admin:log:read` |
 | GET | `/admin/settings` | `admin:settings:read` |
 | PUT | `/admin/settings` | `admin:settings:write` |
+| POST | `/admin/settings/mail/test` | `admin:settings:write`（用当前配置发测试信） |
+| GET | `/admin/payment/gateways` | `admin:settings:read`（渠道声明 + 脱敏配置） |
+| PUT | `/admin/payment/gateways/{key}` | `admin:settings:write`（`••••` 表示不修改密钥） |
+| POST | `/admin/payment/gateways/{key}/test` | `admin:settings:write`（逐项 checks） |
+| PUT | `/admin/payment/default` | `admin:settings:write`（默认渠道） |
+| POST | `/admin/jobs/{name}/run` | `admin:settings:write`（手动触发定时任务） |
+| GET | `/admin/stats/{overview,traffic,revenue,nodes}` | `admin:dashboard:read` |
 | GET | `/admin/coupons` | `admin:coupon:read` |
 | CRUD | `/admin/coupons` | `admin:coupon:write` |
 | GET | `/admin/roles` | `admin:role:read` |

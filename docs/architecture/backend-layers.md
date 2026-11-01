@@ -64,6 +64,9 @@ src/panel/
 │   │   ├── stats.ts
 │   │   ├── subscription.ts       # 订阅渲染与输出
 │   │   └── site.ts
+│   ├── plugin-host/              # 内置插件注册表（manifest/configSchema）
+│   ├── payments/                 # 支付渠道：读 plugins 表 + 字段声明
+│   ├── notify/                   # 邮件 provider：resend / log
 │   ├── schemas/                  # zod 入参 schema（route 与前端共用）
 │   ├── labels/                   # 展示常量（client-safe）
 │   ├── api/                      # 客户端的 fetch 封装与 DTO 类型
@@ -172,11 +175,12 @@ CI 里与 lint / typecheck 一起跑（见 roadmap P0「CI」）。
 
 | 项 | 现状 |
 |---|---|
-| 有服务层 | ✅ `lib/services/` 12 个域（auth / agent / admin-users / settings / nodes / coupons / logs / plugins / billing / admin-commerce / stats / subscription / site） |
-| route 直连 db | ✅ 0 个（`check:layers` 通过，60 个 handler 平均 30 行以内） |
+| 有服务层 | ✅ `lib/services/` 15 个域（auth / agent / admin-users / settings / nodes / coupons / logs / plugins / billing / admin-commerce / stats / subscription / site / setup / mail） |
+| route 直连 db | ✅ 0 个（`check:layers` 通过，71 个 handler 平均 20 行以内，最大 54 行） |
 | schema 目录 | ⚠️ 分散在 `lib/api/{schemas,commerce-schemas,node-schemas}.ts`，待合并到 `lib/schemas/` |
 | 展示常量 | ⚠️ `lib/billing.ts`、`lib/admin-labels.ts` 在 lib 根，待归入 `lib/labels/` |
 | 测试 | ⚠️ 只有 `lib/agent/sign.test.ts`；service 单测待补 |
 
 已完成：28 个 route 的业务下沉到 service（纯重构，响应与错误码逐项比对一致）。
+后续新增能力（支付渠道配置、邮件 provider、站点初始化、定时任务触发）也全部按此分层落地。
 待做：schema / labels 目录归一、service 单测、把 `check:layers` 接进 CI。

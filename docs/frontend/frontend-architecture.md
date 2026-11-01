@@ -221,6 +221,8 @@ const form = useForm<LoginInput>({ resolver: zodResolver(loginSchema), defaultVa
 | 插件管理 | `DataTable` + `Dialog`（安装向导）+ `Tabs` + 动态表单 |
 | 日志 | `DataTable` + 筛选栏 + `Sheet`（详情） |
 | 个人设置 | `Tabs` + 表单 + 语言/主题切换 |
+| 系统设置 | `Tabs`（站点/注册/支付/邮件/权限）；支付与邮件表单**由后端字段声明动态渲染** |
+| 支付渠道 | `Card` + 动态 `Field`（text/password/url/select）+ 启用开关 + 测试连接 checks |
 
 ## 9. 契约变更流程
 
@@ -246,6 +248,9 @@ CI 门禁：
 | 手段 | 说明 |
 |---|---|
 | 首屏 | 根 layout 注入会话 + 页面 skeleton，**不发多余请求**；公开页 RSC/ISR 出 HTML |
+| 菜单切换 | 悬停即预取路由 chunk + 该页首个列表请求（`lib/api/prefetch.ts`），点击基本瞬开 |
+| 缓存 | `staleTime 60s` / `gcTime 10min`；列表换筛选 `placeholderData` 保留旧数据 |
+| 路由骨架 | `(admin)/admin/loading.tsx`、`(user)/dashboard/loading.tsx`，chunk 未到先给反馈 |
 | 按需加载 | 图表、富文本编辑器用 `next/dynamic` 单独 chunk；图标按名 import |
 | 表格 | 服务端分页 + 只查需要的列；大数据量开虚拟滚动 |
 | 缓存 | 公开接口 `revalidate: 60`；订阅渲染 30s 内存缓存 |
