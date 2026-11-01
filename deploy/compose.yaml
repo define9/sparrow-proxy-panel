@@ -1,23 +1,68 @@
+name: sparrow
+
 services:
   postgres:
     image: postgres:17-alpine
     container_name: sparrow-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: sparrow
-      POSTGRES_PASSWORD: dev
-      POSTGRES_DB: sparrow
-      TZ: Asia/Shanghai
-    command: ["postgres", "-c", "timezone=Asia/Shanghai"]
+      POSTGRES_USER: ${POSTGRES_USER:-sparrow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev}
+      POSTGRES_DB: ${POSTGRES_DB:-sparrow}
+      TZ: ${TZ:-Asia/Shanghai}
+    command: ["postgres", "-c", "timezone=${TZ:-Asia/Shanghai}"]
     ports:
+      # 只绑定本机，不暴露到公网
       - "127.0.0.1:5432:5432"
     volumes:
       - sparrow-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sparrow -d sparrow"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sparrow} -d ${POSTGRES_DB:-sparrow}"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # 一次性迁移任务：成功退出后 panel 才启动
+  migrate:
+    build:
+      context: ..
+      dockerfile: src/panel/Dockerfile
+      target: migrator
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sparrow}:${POSTGRES_PASSWORD:-dev}@postgres:5432/${POSTGRES_DB:-sparrow}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  panel:
+    build:
+      context: ..
+      dockerfile: src/panel/Dockerfile
+      target: runner
+    container_name: sparrow-panel
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sparrow}:${POSTGRES_PASSWORD:-dev}@postgres:5432/${POSTGRES_DB:-sparrow}
+      MASTER_KEY: ${MASTER_KEY:?请在 deploy/.env 里设置 MASTER_KEY}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+      # 公网部署时建议设置，初始化向导要求填同一个值
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
+    ports:
+      # 由 Caddy/Nginx 反代，这里只绑定本机
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/v1/public/status >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
 volumes:
   sparrow-pgdata:

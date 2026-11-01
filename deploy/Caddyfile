@@ -1,0 +1,26 @@
+# Caddy 反代示例：自动申请并续期 Let's Encrypt 证书
+# 用法：caddy run --config /etc/caddy/Caddyfile
+
+panel.example.com {
+	encode zstd gzip
+
+	# 静态资源长缓存（Next 产物带 hash）
+	@static path /_next/static/*
+	header @static Cache-Control "public, max-age=31536000, immutable"
+
+	# 订阅输出不要缓存到 CDN（面板自己带 Cache-Control: private）
+	@sub path /sub/*
+	header @sub Cache-Control "private, max-age=60"
+
+	reverse_proxy 127.0.0.1:3000 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output file /var/log/caddy/panel.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+	}
+}

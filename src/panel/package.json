@@ -14,7 +14,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node --env-file=.env --import tsx scripts/seed.ts",
     "db:studio": "drizzle-kit studio",
-    "check:layers": "node scripts/check-layers.mjs"
+    "check:layers": "node scripts/check-layers.mjs",
+    "db:migrate:prod": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
