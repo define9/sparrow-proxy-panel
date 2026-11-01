@@ -70,6 +70,9 @@ export interface ListResponse<T> {
 
 export const queryKeys = {
   overview: ['user', 'overview'] as const,
+  profile: ['user', 'profile'] as const,
+  sessions: ['user', 'sessions'] as const,
+  tokens: ['user', 'tokens'] as const,
   plans: (scope: 'public' | 'user' | 'admin') => ['plans', scope] as const,
   plan: (id: string) => ['plan', id] as const,
   orders: (filters?: Record<string, unknown>) => ['orders', filters ?? {}] as const,

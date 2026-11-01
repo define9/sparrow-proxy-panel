@@ -54,6 +54,58 @@ export interface TrafficPoint {
   total: number
 }
 
+/* ------------------------------ 个人设置 ------------------------------ */
+
+/** 当前账号资料；不含 password_hash / twofa_secret */
+export interface ProfileDto {
+  id: string
+  username: string
+  email: string
+  telegramId: string | null
+  roleCode: string
+  twoFactorEnabled: boolean
+  createdAt: string
+  lastLoginAt: string | null
+}
+
+/** 登录设备；current 标记当前正在使用的会话 */
+export interface SessionDto {
+  id: string
+  ip: string | null
+  userAgent: string | null
+  current: boolean
+  createdAt: string
+  lastSeenAt: string
+  expiresAt: string
+}
+
+/** API Token 列表项：只回前缀，不返回 token_hash */
+export interface TokenDto {
+  id: string
+  name: string
+  prefix: string
+  scopes: string[]
+  createdAt: string
+  lastUsedAt: string | null
+  expiresAt: string | null
+  revokedAt: string | null
+}
+
+/** 创建响应：明文 token 只在这里出现一次 */
+export interface TokenCreatedDto extends TokenDto {
+  token: string
+}
+
+/** 可申请的 PAT 权限范围（服务端与创建表单共用） */
+export const TOKEN_SCOPES = [
+  'profile:read',
+  'subscription:read',
+  'traffic:read',
+  'orders:read'
+] as const
+
+export type TokenScope = (typeof TOKEN_SCOPES)[number]
+
 export type PayMode = 'demo' | 'gateway'
 
 export interface PayResult {

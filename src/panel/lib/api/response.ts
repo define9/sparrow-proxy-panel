@@ -82,6 +82,15 @@ export function route<Ctx>(handler: (req: Request, ctx: Ctx) => Promise<Response
   }
 }
 
+/** 读取 JSON body：非法 JSON 按 400 处理，避免 SyntaxError 落到 500 */
+export async function readJson(req: Request): Promise<unknown> {
+  try {
+    return await req.json()
+  } catch {
+    throw new ApiError(400, 'INVALID_JSON', '请求体不是合法的 JSON')
+  }
+}
+
 export function clientIp(req: Request) {
   const forwarded = req.headers.get('x-forwarded-for')
   if (forwarded) return forwarded.split(',')[0]?.trim()
