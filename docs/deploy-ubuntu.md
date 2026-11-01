@@ -150,6 +150,7 @@ sudo sparrow-agent doctor -c /etc/sparrow-agent/config.yaml
 |---|---|
 | `panel` unhealthy | `docker compose logs panel`；多半是 `DATABASE_URL` 密码与库不一致 |
 | `migrate` exited 1 | `docker compose logs migrate`；改过 `POSTGRES_PASSWORD` 但 volume 还是旧密码 → 改回去或 `down -v` 重来（**删数据**） |
+| `sparrow-caddy` 一直 Restarting | 先看真实报错：`sudo docker compose run --rm --entrypoint caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`；常见是 80/443 被旧 nginx/caddy 占用（`sudo ss -lntp \| grep -E ':(80\|443)'`）或 `.env` 里 `SITE_DOMAIN` 为空 |
 | 证书申请失败 | 域名未解析 / 80 被占 / 云安全组没开；`docker compose logs caddy` |
 | `/setup` 403 | 没填或填错 `SETUP_TOKEN`（值在 `deploy/.env`） |
 | 登录后又跳回登录页 | `NEXT_PUBLIC_SITE_URL` 与实际域名不一致 |

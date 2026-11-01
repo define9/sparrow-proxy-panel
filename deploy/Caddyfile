@@ -1,12 +1,13 @@
-# 由环境变量驱动：SITE_DOMAIN / ACME_EMAIL（见 deploy/.env）
-# SITE_DOMAIN=panel.example.com → 自动申请证书走 HTTPS
-# SITE_DOMAIN=:80               → 纯 HTTP（无域名/内网测试用）
+# 由环境变量驱动（见 deploy/.env）
+#   SITE_DOMAIN=panel.example.com → 自动申请证书走 HTTPS
+#   SITE_DOMAIN=:80               → 纯 HTTP（无域名/内网测试）
+# 两个变量都带默认值：环境变量为空时不会生成非法配置（这是之前重启循环的原因）
 
 {
-	email {$ACME_EMAIL}
+	email {$ACME_EMAIL:ops@example.com}
 }
 
-{$SITE_DOMAIN} {
+{$SITE_DOMAIN::80} {
 	encode zstd gzip
 
 	# Next 产物带 hash，可长缓存

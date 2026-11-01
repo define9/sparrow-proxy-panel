@@ -176,6 +176,23 @@ for i in $(seq 1 80); do
   fi
 done
 
+# ---------- 4. caddy 自检 ----------
+sleep 3
+CADDY_STATUS="$("${DOCKER[@]}" compose ps --format '{{.Service}} {{.Status}}' 2>/dev/null | grep '^caddy ' || true)"
+if grep -qiE 'restarting|exited' <<<"$CADDY_STATUS"; then
+  warn "caddy 异常：$CADDY_STATUS"
+  echo "  最近日志："
+  "${DOCKER[@]}" compose logs --tail 20 caddy 2>&1 | sed 's/^/    /'
+  cat <<'TIP'
+
+  常见原因：
+    1) 80/443 被占用（旧 nginx/caddy/systemd 服务）：sudo ss -lntp | grep -E ':(80|443)'
+    2) 配置解析失败：按下面命令看真实报错
+       sudo docker compose run --rm --entrypoint caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+    3) .env 里 SITE_DOMAIN 为空或格式不对（应为 panel.example.com 或 :80）
+TIP
+fi
+
 echo
 "${DOCKER[@]}" compose ps
 echo
