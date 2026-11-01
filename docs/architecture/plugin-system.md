@@ -342,6 +342,62 @@ node.source.fetch hook → 插件返回节点列表
 
 导入的节点标记 `source = 'plugin:<key>'`，可一键禁用/清理。
 
+## 7.5 邮件通道插件（内置 Resend）
+
+发信被抽象成 provider，业务代码只调 `sendMail()`，换供应商不改调用方。
+
+### 7.5.1 接口
+
+```ts
+// lib/notify/types.ts
+export interface MailMessage { to: string; subject: string; html: string; text?: string }
+
+export interface MailProvider {
+  key: string          // 'notify-resend' | 'notify-log'
+  name: string
+  send(msg: MailMessage): Promise<{ id?: string }>
+}
+```
+
+`lib/notify/index.ts` 的 `sendMail(msg)` 读 `settings.mail.provider` 解析出 provider；
+未配置时抛 `ApiError(422, MAIL_NOT_CONFIGURED)`，**不静默丢信**。
+
+### 7.5.2 内置 provider
+
+| key | 说明 | 配置 |
+|---|---|---|
+| `notify-resend` | Resend HTTP API（`POST https://api.resend.com/emails`，Bearer 直连，无 SDK 依赖） | `resend.apiKey`、`resend.from` |
+| `notify-log` | 只写日志，开发/排障用；同时在本地返回 `devCode` | 无 |
+
+配置存在 `settings.mail`（key-value，不需要迁移）：
+
+```jsonc
+{
+  "provider": "resend",
+  "resend": { "apiKey": "re_xxx", "from": "Sparrow <noreply@yourdomain.com>" },
+  "smtp":   { "host": "", "port": 465, "username": "", "password": "", "from": "" },
+  "testTo": "you@example.com"
+}
+```
+
+密钥回显一律脱敏为 `••••` 并附 `hasApiKey`；提交 `••••` 表示“保持不变”。
+
+### 7.5.3 管理端
+
+「系统设置 → 邮件」：选 provider、填 API Key / 发件人、填测试收件人后点「发送测试邮件」
+（`POST /api/v1/admin/settings/mail/test`），失败会把上游错误原文带回来（例如
+`Resend HTTP 401：API key is invalid`），不会假装成功。
+
+### 7.5.4 外部插件如何接进来
+
+外置 `notify` 插件实现同一个语义即可，两种形态：
+
+1. **HTTP 型**（P2 外置运行时）：manifest 里 `hooks: ["notification.send"]`，
+   面板把 `{ to, subject, html, text }` POST 过去，插件返回 `{ id }`；
+2. **自建 provider**：在内置注册表加一个 `notify-<key>` 实现，随版本发布。
+
+判定标准：**只要 `sendMail()` 的调用方不变**，实现放哪都行。
+
 ## 8. 支付插件（多渠道）
 
 支付是**事件驱动**的插件，不占 schedules；但需要定时对账兜底（`payment.reconcile`，走 §5 的调度）。

@@ -244,6 +244,22 @@ location / {
 
 `deploy/Caddyfile` 只是默认模板，删掉不影响面板。
 
+## 6.5 配置发信（可选）
+
+不配也能用，只是注册验证码会以 `devCode` 形式直接返回给前端（仅适合自用）。
+
+配 Resend：登录 https://resend.com 建 API Key 并验证发件域名，然后
+「系统设置 → 邮件」→ Provider 选 `Resend` → 填 API Key 与发件人（如 `Sparrow <noreply@yourdomain.com>`）
+→ 点「发送测试邮件」确认收到。
+
+日志里能看到上游真实返回，例如配置错误时：
+
+```
+邮件发送失败（notify-resend）：Resend HTTP 401：{"message":"API key is invalid"}
+```
+
+想先本地验证不真发信：Provider 选「本地日志」，邮件内容会出现在 `docker compose logs panel`。
+
 ## 7. 节点接入（一条命令）
 
 面板自带 Agent 二进制分发：构建一次，之后每个节点一条命令装好并注册。
