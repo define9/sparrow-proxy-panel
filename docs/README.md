@@ -22,6 +22,7 @@
 | 7 | [architecture/data-model.md](architecture/data-model.md) | 表结构、索引、迁移策略 |
 | 8 | [architecture/api-design.md](architecture/api-design.md) | 接口分层、四套鉴权、Agent 协议、错误码、限流 |
 | 9 | [architecture/plugin-system.md](architecture/plugin-system.md) | manifest、hook、定时任务、git URL 安装、支付渠道、索引源 |
+| — | [architecture/notify-providers.md](architecture/notify-providers.md) | **邮件发送 provider**（内置 Resend / 日志）、配置脱敏、验证码与找回密码接线 |
 | 10 | [architecture/agent-cli.md](architecture/agent-cli.md) | Agent 配置、运行循环、自更新、离线容错 |
 | 11 | [architecture/security.md](architecture/security.md) | 威胁模型、密钥管理、支付安全、上线清单 |
 

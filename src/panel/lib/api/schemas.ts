@@ -18,6 +18,24 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(8, '新密码至少 8 位')
 })
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('请输入合法邮箱')
+})
+
+export const resetPasswordSchema = z.object({
+  email: z.string().email('请输入合法邮箱'),
+  code: z.string().min(4, '请输入验证码'),
+  password: z.string().min(8, '密码至少 8 位').max(72)
+})
+
+export const mailTestSchema = z.object({
+  // 用宽松校验：测试地址常见 a@b.c 这类内网/占位域名，zod 默认 email() 会拒绝
+  to: z
+    .string()
+    .trim()
+    .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, '请输入合法收件邮箱')
+})
+
 export const profileSchema = z.object({
   username: z.string().min(2, '用户名至少 2 位').max(32),
   email: z.string().email('请输入合法邮箱')
@@ -110,10 +128,30 @@ export const settingsSchema = z.object({
     .partial(),
   mail: z
     .object({
-      host: z.string().default(''),
-      port: z.coerce.number().default(465),
-      username: z.string().default(''),
-      password: z.string().default('')
+      provider: z.enum(['resend', 'log']).optional(),
+      resend: z
+        .object({
+          apiKey: z.string().optional(),
+          from: z.string().optional()
+        })
+        .partial()
+        .optional(),
+      smtp: z
+        .object({
+          host: z.string().optional(),
+          port: z.coerce.number().int().min(1).max(65535).optional(),
+          username: z.string().optional(),
+          password: z.string().optional(),
+          from: z.string().optional()
+        })
+        .partial()
+        .optional(),
+      testTo: z.string().optional(),
+      // 旧版扁平结构（设置页尚未改造时继续兼容）
+      host: z.string().optional(),
+      port: z.coerce.number().int().min(1).max(65535).optional(),
+      username: z.string().optional(),
+      password: z.string().optional()
     })
     .partial()
 })
