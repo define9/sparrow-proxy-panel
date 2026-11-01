@@ -54,10 +54,16 @@ export interface TrafficPoint {
   total: number
 }
 
+export type PayMode = 'demo' | 'gateway'
+
 export interface PayResult {
   orderNo: string
   payUrl: string
   /** 重复支付（订单已 paid）时为 true，不会重复开通订阅 */
   idempotent: boolean
   subscriptionId: string | null
+  /** demo = 演示网关直接落定；gateway = 已配置渠道（payUrl 仍指向演示支付页） */
+  mode: PayMode
+  /** mode=gateway 时为渠道 key */
+  gateway?: string
 }

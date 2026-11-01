@@ -10,6 +10,7 @@ import type {
   TrafficPoint
 } from '@/lib/api/types'
 import { db } from '@/lib/db'
+import { resolveCheckoutGateway } from '@/lib/payments'
 import {
   announcements,
   coupons,
@@ -350,7 +351,8 @@ export async function payOrder(userId: string, orderNo: string): Promise<PayResu
       orderNo,
       payUrl: payUrl(orderNo),
       idempotent: true,
-      subscriptionId: existing?.id ?? null
+      subscriptionId: existing?.id ?? null,
+      mode: 'demo'
     }
   }
 
@@ -372,6 +374,9 @@ export async function payOrder(userId: string, orderNo: string): Promise<PayResu
     throw new ApiError(422, 'ORDER_EXPIRED', '订单已超时，请重新下单')
   }
 
+  // 默认渠道已启用且必填项齐全时走渠道结算（本次仍返回演示支付页地址）
+  const gateway = await resolveCheckoutGateway()
+
   return db.transaction(async (tx) => {
     const [row] = await tx.select().from(orders).where(eq(orders.id, pre.id)).limit(1).for('update')
     if (!row) throw new ApiError(404, 'ORDER_NOT_FOUND', '订单不存在')
@@ -387,11 +392,28 @@ export async function payOrder(userId: string, orderNo: string): Promise<PayResu
         orderNo,
         payUrl: payUrl(orderNo),
         idempotent: true,
-        subscriptionId: existing?.id ?? null
+        subscriptionId: existing?.id ?? null,
+        mode: 'demo' as const
       }
     }
     if (row.status !== 'pending') {
       throw new ApiError(409, 'ORDER_NOT_PAYABLE', '当前订单状态不可支付')
+    }
+
+    if (gateway) {
+      await tx
+        .update(orders)
+        .set({ paymentMethod: gateway, updatedAt: new Date() })
+        .where(eq(orders.id, row.id))
+
+      return {
+        orderNo,
+        payUrl: payUrl(orderNo),
+        idempotent: false,
+        subscriptionId: null,
+        mode: 'gateway' as const,
+        gateway
+      }
     }
 
     const settled = await settleOrderAsPaid(tx, row, 'demo')
@@ -400,7 +422,8 @@ export async function payOrder(userId: string, orderNo: string): Promise<PayResu
       orderNo,
       payUrl: payUrl(orderNo),
       idempotent: false,
-      subscriptionId: settled.subscriptionId
+      subscriptionId: settled.subscriptionId,
+      mode: 'demo' as const
     }
   })
 }
