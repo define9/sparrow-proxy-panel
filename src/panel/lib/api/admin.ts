@@ -61,30 +61,27 @@ export interface AdminLogDto {
   payload: Record<string, unknown>
 }
 
-export interface SettingsDto {
-  site: { name: string; logo: string; announcement: string; icp: string }
-  register: { open: boolean; emailVerify: boolean; giftTrafficGb: number; inviteRequired: boolean }
-  payment: { epayEnabled: boolean; stripeEnabled: boolean }
-  mail: {
-    /** 新版结构（设置页 UI 改造前可能不存在） */
-    provider?: 'resend' | 'log'
-    resend?: { apiKey: string; from: string; hasApiKey: boolean }
-    smtp?: {
-      host: string
-      port: number
-      username: string
-      password: string
-      from: string
-      hasPassword: boolean
-    }
-    testTo?: string
-    /** 旧设置页兼容字段（等价于 smtp.*） */
+export type MailProvider = 'resend' | 'log'
+
+export interface MailSettingsDto {
+  provider: MailProvider
+  resend: { apiKey: string; hasApiKey: boolean; from: string }
+  smtp: {
     host: string
     port: number
     username: string
     password: string
-    hasPassword?: boolean
+    hasPassword: boolean
+    from: string
   }
+  testTo: string
+}
+
+export interface SettingsDto {
+  site: { name: string; logo: string; announcement: string; icp: string }
+  register: { open: boolean; emailVerify: boolean; giftTrafficGb: number; inviteRequired: boolean }
+  payment: { epayEnabled: boolean; stripeEnabled: boolean }
+  mail: MailSettingsDto
 }
 
 export interface PluginJobDto {
@@ -347,6 +344,16 @@ export function useSaveSettings() {
       qc.setQueryData(queryKeys.settings, data)
       qc.invalidateQueries({ queryKey: ['logs'] })
     }
+  })
+}
+
+export function useTestMailSettings() {
+  return useMutation({
+    mutationFn: (to: string) =>
+      apiFetch<{ ok: boolean; provider: MailProvider }>('/api/v1/admin/settings/mail/test', {
+        method: 'POST',
+        body: { to }
+      })
   })
 }
 

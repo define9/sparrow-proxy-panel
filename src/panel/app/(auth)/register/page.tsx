@@ -65,11 +65,9 @@ export default function RegisterPage() {
       setCountdown(60)
 
       if (result.devCode) {
-        // 演示环境：接口直接返回验证码，自动填入
+        // 本地日志 provider 会把验证码直接回显，方便开发环境自测
         form.setValue('code', result.devCode, { shouldValidate: true })
-        toast.success('验证码已生成', {
-          description: `演示环境验证码 ${result.devCode}，已自动填入`
-        })
+        toast.info(`开发模式验证码：${result.devCode}`)
       } else {
         toast.success('验证码已发送', { description: '请查收邮箱，10 分钟内有效' })
       }
