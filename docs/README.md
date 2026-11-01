@@ -1,6 +1,6 @@
 # Sparrow Proxy Panel · 文档索引
 
-代理面板（Panel）+ 节点代理程序（Agent CLI）的产品与技术文档。
+代理面板（Panel）+ 节点代理程序（Agent）的产品与技术文档。
 
 ## 阅读顺序
 
@@ -8,60 +8,62 @@
 
 | # | 文档 | 内容 |
 |---|---|---|
-| 1 | [product/vision-and-scope.md](product/vision-and-scope.md) | 定位、设计原则、角色、功能清单、MVP 边界 |
-| 2 | [product/user-flows.md](product/user-flows.md) | 注册下单支付、订阅使用、节点接入、管理操作流程与状态机 |
+| 1 | [product/vision-and-scope.md](product/vision-and-scope.md) | 定位、设计原则、角色、功能范围、MVP 边界 |
+| 2 | [product/user-flows.md](product/user-flows.md) | 下单支付、订阅使用、节点接入、管理操作与状态机 |
 
 ### 架构
 
 | # | 文档 | 内容 |
 |---|---|---|
-| 3 | [architecture/overview.md](architecture/overview.md) | 分层架构、部署拓扑、请求生命周期、性能预算、容错 |
-| 4 | [architecture/tech-stack.md](architecture/tech-stack.md) | 技术选型与版本锁定（含"为什么不选"） |
-| 5 | [architecture/monorepo-layout.md](architecture/monorepo-layout.md) | **ADR-0001：为什么 monorepo**，目录结构、依赖方向 |
-| 6 | [architecture/data-model.md](architecture/data-model.md) | 数据模型、索引、迁移策略 |
-| 7 | [architecture/api-design.md](architecture/api-design.md) | API 分层、三套鉴权、Agent 协议、错误码、限流 |
-| 8 | [architecture/plugin-system.md](architecture/plugin-system.md) | 插件 manifest、hook 目录、三方源、插件市场 |
-| 9 | [architecture/agent-cli.md](architecture/agent-cli.md) | Agent 设计：配置、运行循环、自更新、离线容错 |
-| 10 | [architecture/security.md](architecture/security.md) | 威胁模型、密钥管理、支付安全、上线检查清单 |
+| 3 | [architecture/overview.md](architecture/overview.md) | 分层、部署拓扑、请求生命周期、性能预算、容错 |
+| 4 | [architecture/tech-stack.md](architecture/tech-stack.md) | 选型与版本（含"为什么不选"） |
+| 5 | [architecture/monorepo-layout.md](architecture/monorepo-layout.md) | **ADR-0001：为什么 monorepo**、目录、依赖方向 |
+| 6 | [architecture/data-model.md](architecture/data-model.md) | 表结构、索引、迁移策略 |
+| 7 | [architecture/api-design.md](architecture/api-design.md) | 接口分层、四套鉴权、Agent 协议、错误码、限流 |
+| 8 | [architecture/plugin-system.md](architecture/plugin-system.md) | manifest、hook、定时任务、git URL 安装、支付渠道、索引源 |
+| 9 | [architecture/agent-cli.md](architecture/agent-cli.md) | Agent 配置、运行循环、自更新、离线容错 |
+| 10 | [architecture/security.md](architecture/security.md) | 威胁模型、密钥管理、支付安全、上线清单 |
 
 ### 前端
 
 | # | 文档 | 内容 |
 |---|---|---|
-| 11 | [frontend/frontend-architecture.md](frontend/frontend-architecture.md) | 目录结构、布局、路由、数据获取、表格/表单模式、契约变更流程 |
-| 12 | [frontend/design-system.md](frontend/design-system.md) | **颜色体系**（语义 token / 主题 / 明暗模式）、字体、图标、状态色映射 |
-| 13 | [frontend/i18n.md](frontend/i18n.md) | **多语言方案**（@nuxtjs/i18n v10 + Nuxt UI locale）、key 规范、CI 校验 |
-| 14 | [frontend/navigation.md](frontend/navigation.md) | **菜单与路由**、权限过滤、命令面板、快捷键、守卫 |
+| 11 | [frontend/frontend-architecture.md](frontend/frontend-architecture.md) | 目录、布局、路由、数据获取、表格/表单模式 |
+| 12 | [frontend/design-system.md](frontend/design-system.md) | shadcn CSS 变量、状态色、图标、字体、明暗模式 |
+| 13 | [frontend/i18n.md](frontend/i18n.md) | next-intl 方案、key 规范、CI 校验 |
+| 14 | [frontend/navigation.md](frontend/navigation.md) | 菜单与路由、权限过滤、命令面板、快捷键、守卫 |
 
 ### 计划
 
 | # | 文档 | 内容 |
 |---|---|---|
-| 15 | [roadmap.md](roadmap.md) | P0–P3 迭代计划、验收标准、并行策略、风险登记 |
+| 15 | [roadmap.md](roadmap.md) | P0–P3、验收标准、风险登记 |
 
 ## 已锁定的核心决策
 
 | 决策 | 结论 | 依据 |
 |---|---|---|
 | 仓库形态 | Monorepo（pnpm workspaces + Go module 同仓） | [ADR-0001](architecture/monorepo-layout.md) |
-| 前端基线 | `nuxt-ui-templates/dashboard` 官方模板，保留其目录与工程约定 | [tech-stack](architecture/tech-stack.md) |
-| 前端 | Nuxt 4.6 + Nuxt UI 4.12（Tailwind 4），最大化使用原生组件 | [frontend-architecture](frontend/frontend-architecture.md) |
-| 颜色 | 只用 Nuxt UI 语义 token，品牌色在 `app.config.ts` + `@theme` 定义 | [design-system](frontend/design-system.md) |
-| 多语言 | `@nuxtjs/i18n` v10，`no_prefix`，zh-CN + en，Nuxt UI locale 联动 | [i18n](frontend/i18n.md) |
-| 菜单 | `UNavigationMenu` + `UDashboardSidebar` + `UDashboardSearch` 命令面板，权限驱动 | [navigation](frontend/navigation.md) |
-| 后端 | Nitro（Nuxt 同仓），REST/JSON，路由类型由 Nuxt 生成 | [overview](architecture/overview.md) |
-| 数据库 | PostgreSQL 17 + Drizzle ORM 0.45 | [data-model](architecture/data-model.md) |
-| 部署形态 | **单机单体**：应用 + PostgreSQL，无 Redis / MQ；缓存与限流用进程内存 | [overview](architecture/overview.md) |
+| 前端框架 | Next.js 16 App Router + React 19（后台 CSR，公开页可选 RSC） | [tech-stack](architecture/tech-stack.md) |
+| UI | shadcn/ui（源码 copy-in）+ Tailwind CSS 4 + Radix | [design-system](frontend/design-system.md) |
+| 表格 / 图表 / 表单 | TanStack Table / Recharts（shadcn Chart）/ react-hook-form + zod | [frontend-architecture](frontend/frontend-architecture.md) |
+| 颜色 | 只用 shadcn 的 CSS 变量语义类，品牌色在 `globals.css` 定义 | [design-system](frontend/design-system.md) |
+| 多语言 | next-intl，cookie 驱动、无路由前缀，zh-CN + en | [i18n](frontend/i18n.md) |
+| 菜单 | shadcn `Sidebar` + `Command`（cmdk）命令面板，权限驱动 | [navigation](frontend/navigation.md) |
+| 后端 | Next Route Handlers（`app/api/v1`）+ 服务层 `lib/services`（页面与接口共用） | [overview](architecture/overview.md) |
+| 数据库 | PostgreSQL 17 + Drizzle ORM | [data-model](architecture/data-model.md) |
+| 部署形态 | **单机单体**：Next standalone + PostgreSQL，无 Redis / MQ | [overview](architecture/overview.md) |
+| 定时任务 | `instrumentation.ts` 内 node-cron，多副本用 advisory lock 选主 | [overview](architecture/overview.md) |
 | CLI 语言 | Go 1.24+（单静态二进制） | [agent-cli](architecture/agent-cli.md) |
 | 跨端契约 | `packages/contracts`（zod）→ OpenAPI → Go 代码生成，CI 检测漂移 | [ADR-0001](architecture/monorepo-layout.md) |
-| 插件运行时 | 进程外 HTTP/gRPC 优先，内置插件同进程 | [plugin-system](architecture/plugin-system.md) |
-| 认证 | 会话 + RBAC + PAT + 节点 HMAC 签名 + 插件 token，四套独立 | [api-design](architecture/api-design.md) |
+| 插件运行时 | 社区插件填 git URL 安装，外置进程运行；内置插件同进程 | [plugin-system](architecture/plugin-system.md) |
+| 认证 | 自建数据库会话（`sessions` 表）+ RBAC + PAT + 节点 HMAC + 插件 token | [api-design](architecture/api-design.md) |
 
 ## 术语表
 
 | 术语 | 含义 |
 |---|---|
-| Panel | 面板本体，Nuxt 全栈应用，用户与管理员使用 |
+| Panel | 面板本体，Next.js 全栈应用，用户与管理员使用 |
 | Agent | 部署在代理节点上的 CLI（`src/agent`），拉取配置、上报状态与流量 |
 | Plan | 商品/套餐（流量、时长、倍率、设备数等售卖规格） |
 | Order | 订单，用户购买 Plan 的记录 |
@@ -72,31 +74,4 @@
 | Contract | 契约，Panel 与 Agent 之间的 API 定义，生成产物，跨端一致 |
 | Hook | 插件扩展点，面板在业务节点触发的回调 |
 
-## 工程现状（骨架已落地）
-
-| 能力 | 状态 | 位置 |
-|---|---|---|
-| Monorepo（pnpm workspaces + Turbo + Go module） | ✅ | `package.json` / `pnpm-workspace.yaml` / `turbo.json` |
-| 跨端契约（zod → OpenAPI） | ✅ 14 路径 / 12 组件 | `packages/contracts/` |
-| 权限点（24 个，前后端共用） | ✅ | `packages/contracts/src/permissions.ts` |
-| 数据模型 | ✅ 33 表 / 28 枚举 | `src/panel/drizzle/schema/` |
-| 迁移 | ✅ 已生成并实测 | `src/panel/drizzle/migrations/` |
-| 登录 / 会话 / RBAC | ✅ 实测通过 | `server/api/v1/auth/`、`server/utils/auth.ts` |
-| 布局与导航 | ✅ 4 布局 / 权限驱动菜单 | `app/layouts/`、`app/utils/navigation.ts` |
-| 主题 / 明暗模式 / 中英文 | ✅ | `app/app.config.ts`、`i18n/` |
-| CI（lint / typecheck / 契约漂移 / 迁移漂移 / 构建） | ✅ | `.github/workflows/ci.yml` |
-| Agent CLI | ✅ 注册/心跳/配置/流量/命令/自更新骨架 | `src/agent/` |
-| 商品 + 订单（用户端 + 管理端） | ✅ 状态机、库存、幂等 | `server/api/v1/{user,admin}/{plans,orders}/` |
-| 订阅管理 + 多格式渲染器 | ✅ v2ray / clash / sing-box | `server/utils/subscription/` |
-| 节点管理 + 内核配置渲染 | ✅ sing-box / xray + HMAC 签名 | `server/utils/node/` |
-| 插件宿主 + 插件管理 | ✅ manifest / hook / 熔断 / 三方源(url) | `server/utils/plugin-host/` |
-| 支付回调 / 注册流程 / 2FA / 用户管理 / 日志 | 待实现 | 见 [roadmap](roadmap.md) |
-
-本地验证记录：`pnpm lint`、`pnpm typecheck`、`pnpm test`（109 用例）、`pnpm gen:check`、`pnpm db:check`、`pnpm build` 全部通过；
-迁移在 PostgreSQL 17 上实跑成功；21 个页面与 8 个 API 逐个冒烟通过（200），未登录访问管理端 401。
-
-P0 五个模块由 5 个并行 worker 交付（Orca 编排，各自独立 worktree + 分支，合并到 main）：
-Agent CLI / 商品订单 / 订阅渲染 / 节点管理 / 插件宿主。
-
-**跨端签名一致性**：面板端与 Agent 端使用同一组 4 个固定测试向量（canonical = `METHOD\nPATH\nTIMESTAMP\nNONCE\nSHA256(body)`），
-由独立实现（Python `hmac`）生成，两端各自断言，杜绝"自己验自己"。
+> 本文档集只描述**目标设计**，不记录交付进度；进度见 [roadmap](roadmap.md) 的勾选状态。

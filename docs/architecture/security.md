@@ -16,11 +16,12 @@
 
 | 项 | 措施 |
 |---|---|
-| 密码存储 | Argon2id（`@node-rs/argon2`，无 node-gyp 依赖）或 scrypt；参数 m=64MB, t=3, p=1 |
+| 密码存储 | Argon2id（`@node-rs/argon2`，无 node-gyp 依赖）；参数 m=64MB, t=3, p=1 |
 | 密码策略 | 最小 8 位；禁用常见弱密码库；登录失败不提示"邮箱不存在" |
 | 2FA | 管理员强制开启（可配），TOTP；密钥 AES-GCM 加密存储；提供恢复码（一次性） |
-| 会话 | 加密 cookie，HttpOnly + Secure + SameSite=Lax；空闲 2h / 绝对 7d 过期；IP/UA 异常检测 |
+| 会话 | 自建会话：随机会话 id 存 cookie（HttpOnly + Secure + SameSite=Lax），`sessions` 表存哈希；空闲 2h / 绝对 7d 过期；IP/UA 异常检测 |
 | 强制下线 | 会话存库，管理员可踢下线 |
+| CSRF | cookie 用 SameSite=Lax；写操作校验 `Origin`（同源才放行），不使用 GET 触发变更 |
 | API Token | 仅存 hash；创建时明文展示一次；可设 scope / 过期；支持吊销 |
 | 节点认证 | 每节点独立 secret + HMAC 签名 + 时间窗 + nonce 防重放；支持密钥轮换（双密钥过渡） |
 | 插件认证 | 每插件独立 token，可吊销；权限点最小化 |
@@ -40,20 +41,19 @@
 | SQL | Drizzle 参数化查询；禁止拼接 SQL；报表用 CTE 模板化 |
 | 文件上传（证书/插件包） | 类型白名单、大小限制、zip slip 防护、解压后大小限制、禁止可执行权限、病毒扫描（P2） |
 | 订阅输出 | 不回显任何内部 ID；token 使用 uuid v4，足够随机 |
-| XSS | Vue 默认转义；禁止 `v-html`（除非内容来自受控的 markdown 渲染器 + DOMPurify） |
-| SSRF | 插件三方源 URL 拉取需校验，禁止内网地址段（除非管理员显式允许） |
+| XSS | React 默认转义；禁止 `dangerouslySetInnerHTML`（除非内容来自受控的 markdown 渲染器 + DOMPurify）；CSP 不放开 `unsafe-inline` |
+| SSRF | 插件 git URL / 索引源拉取需校验：只允许 https，解析后禁止内网、回环与云元数据地址段（如 `169.254.169.254`） |
 
 ## 5. 密钥管理
 
 | 密钥 | 存储 |
 |---|---|
-| `NUXT_SESSION_PASSWORD` | 环境变量 / Docker secret，不入库 |
-| 主加密密钥 `MASTER_KEY` | 环境变量，用于加密节点私钥、插件密钥、2FA 密钥 |
+| `MASTER_KEY` | 环境变量，用于加密节点私钥、插件密钥、2FA 密钥 |
 | 节点 secret | 数据库加密存储（AES-256-GCM），接口返回脱敏 |
 | 支付网关密钥 | 插件配置加密存储 |
 | 证书私钥 | 数据库加密存储 |
 
-加密实现：`server/utils/crypto.ts`，AES-256-GCM，密钥版本号前缀（`v1:...`）以支持轮换。轮换流程：双密钥并存 → 重加密后台任务 → 移除旧密钥。
+加密实现：`lib/crypto.ts`，AES-256-GCM，密钥版本号前缀（`v1:...`）以支持轮换。轮换流程：双密钥并存 → 重加密后台任务 → 移除旧密钥。
 
 ## 6. 传输安全
 
@@ -74,12 +74,17 @@
 
 ## 8. 插件安全
 
-- 默认外置进程运行，文件系统只读挂载，低权限用户
-- 权限点最小化，安装时展示并需管理员确认
-- 每个插件独立 token，可一键吊销
-- 调用超时 3s + 熔断，防止拖垮主流程
-- 插件源码与发布者签名校验（sha256 + ed25519）
-- 插件行为全部记入 `plugin_events` 与 `audit_logs`
+社区插件从 git URL 装进来，等价于"运维主动引入一段不可信代码"。边界靠下面几条保证：
+
+- **默认外置进程**，文件系统只读（可写目录仅 `data/plugins/{key}/data`），低权限用户运行
+- **权限点最小化**：manifest 申请 → 管理员逐条确认 → token scope = `granted_scopes`，运行期只能降不能升
+- **出网白名单**：只允许 manifest `egress` 里的域名，内网段一律拦截（防 SSRF 与横向移动）
+- **前端不注入**：插件 UI 只有 `schema`（核心渲染）与 `iframe`（`sandbox="allow-scripts allow-forms"` + 短时 token）；禁止把插件 bundle 打进主应用
+- **git 协议限制**：只允许 https 与公网主机；拒绝 `ssh://`、`file://`、`ext::`
+- **不可信构建**：默认 `ALLOW_PLUGIN_BUILD=0`，不在面板上执行 `npm install` / `postinstall`
+- **签名**：有 ed25519 签名显示"已验证"；无签名标"未签名社区插件"，安装需二次确认
+- **可用性**：单次调用 3s 超时 + 熔断；10 分钟崩溃 5 次自动禁用
+- 插件行为全部记入 `plugin_events` 与 `audit_logs`；每次安装/升级/回滚记录 `repo_url@commit_sha`
 
 ## 9. 速率限制
 

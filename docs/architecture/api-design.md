@@ -10,7 +10,7 @@
 | 时间 | ISO 8601 UTC，如 `2026-10-24T08:00:00.000Z` |
 | 金额 | 字符串传递，避免 JS 浮点误差：`"19.90"` |
 | 字节 | 数字（字节），前端用格式化函数转 GB/TB |
-| 鉴权 | 见 §2，三套独立机制 |
+| 鉴权 | 见 §2，四套独立凭据 |
 
 ### 成功响应
 
@@ -49,7 +49,7 @@
 | `SUB_*` | 订阅 | `SUB_NOT_FOUND` `SUB_EXPIRED` `SUB_OVERUSED` `SUB_DEVICE_LIMIT` |
 | `NODE_*` | 节点 | `NODE_NOT_FOUND` `NODE_DUPLICATED` `NODE_CERT_EXPIRED` |
 | `AGENT_*` | 节点通信 | `AGENT_SIGN_INVALID` `AGENT_TIMESTAMP_SKEW` `AGENT_VERSION_TOO_OLD` |
-| `PLUGIN_*` | 插件 | `PLUGIN_NOT_INSTALLED` `PLUGIN_PERMISSION_DENIED` `PLUGIN_HOOK_FAILED` |
+| `PLUGIN_*` | 插件 | `PLUGIN_NOT_INSTALLED` `PLUGIN_PERMISSION_DENIED` `PLUGIN_HOOK_FAILED` `PLUGIN_REPO_FORBIDDEN` `PLUGIN_MANIFEST_INVALID` `PLUGIN_VERSION_INCOMPATIBLE` `PLUGIN_INSTALL_FAILED` |
 | `RATE_*` | 限流 | `RATE_LIMITED` |
 
 ### 分页
@@ -77,11 +77,11 @@
 
 ## 2. 鉴权模型
 
-三套机制，**互不复用**，避免一处配置失误导致越权。
+四套凭据、三类调用方，**互不复用**，避免一处配置失误导致越权：会话（浏览器）与 PAT（编程）都属于用户身份，但校验路径独立。
 
 ### 2.1 用户 / 管理员
 
-- 浏览器：`nuxt-auth-utils` 加密 cookie 会话（HttpOnly, Secure, SameSite=Lax）
+- 浏览器：自建会话，cookie 里放 32 字节随机 id（HttpOnly + Secure + SameSite=Lax），`sessions` 表只存 `SHA-256(id)`
 - 编程访问：`Authorization: Bearer spx_xxx`（personal_access_token，带 scope）
 - 管理端接口：会话 + 权限点校验（`requirePermission('admin:node:write')`）
 
@@ -180,10 +180,16 @@ METHOD \n PATH \n TIMESTAMP \n NONCE \n SHA256(body)
 | GET | `/admin/users/{id}/sessions` | `admin:user:read` |
 | DELETE | `/admin/users/{id}/sessions/{sid}` | `admin:user:write` |
 | GET | `/admin/plugins` | `admin:plugin:read` |
-| POST | `/admin/plugins` | `admin:plugin:write`（安装） |
-| PATCH | `/admin/plugins/{key}` | `admin:plugin:write`（配置/启停） |
+| POST | `/admin/plugins/preview` | `admin:plugin:write`（解析 git URL，返回 manifest 与权限，不落库） |
+| POST | `/admin/plugins/install` | `admin:plugin:write`（异步任务，返回 taskId） |
+| GET | `/admin/plugins/{key}/install-status` | `admin:plugin:read`（安装/升级进度） |
+| POST | `/admin/plugins/{key}/update` | `admin:plugin:write`（装到新目录，探活后切换） |
+| POST | `/admin/plugins/{key}/rollback` | `admin:plugin:write`（切回 `previous_version`） |
+| POST | `/admin/plugins/{key}/restart` | `admin:plugin:write` |
+| PATCH | `/admin/plugins/{key}` | `admin:plugin:write`（配置/启停/授权范围） |
 | DELETE | `/admin/plugins/{key}` | `admin:plugin:delete` |
 | GET | `/admin/plugins/{key}/logs` | `admin:plugin:read` |
+| GET | `/admin/plugins/{key}/jobs` | `admin:plugin:read`（定时任务与最近运行） |
 | GET | `/admin/plugin-sources` | `admin:plugin:read` |
 | POST | `/admin/plugin-sources` | `admin:plugin:write` |
 | POST | `/admin/plugin-sources/{id}/sync` | `admin:plugin:write` |
@@ -338,8 +344,10 @@ Base：`/api/v1/agent`，全部需要 HMAC 签名。
 | Agent 心跳 | 120 次 / 分钟 / node_id（容忍时钟漂移与重试） |
 | Agent 配置拉取 | 30 次 / 分钟 / node_id |
 | 通用 API | 用户 600 次 / 分钟；管理端 1200 次 / 分钟 |
+| 插件安装 / 升级 | 5 次 / 小时（单实例），防止被当成任意 git 拉取代理 |
 
-实现：进程内滑动窗口计数（Map + 定期清理），`server/middleware/rate-limit.ts`。
+实现：进程内滑动窗口计数（Map + 定期清理），代码在 `lib/rate-limit.ts`，由 route handler 的公共封装统一调用。
+`middleware.ts` 跑在 edge runtime，只做基于 cookie 的粗粒度拦截（例如未登录直接 401），不承担业务限流。
 单机单实例下无需分布式限流；多副本场景再替换为 PG 表或 Redis 实现（实现收敛在单个文件内）。
 
 ## 8. 版本与兼容

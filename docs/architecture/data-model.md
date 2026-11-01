@@ -25,7 +25,7 @@ PostgreSQL 17 + Drizzle。所有表使用 `uuid` 主键（`gen_random_uuid()`，
 | id | uuid pk | |
 | email | citext unique | 登录名，citext 大小写不敏感 |
 | username | varchar(64) unique | 展示名 |
-| password_hash | text | scrypt / argon2id |
+| password_hash | text | Argon2id |
 | role_id | uuid → roles | |
 | status | enum(active, disabled, pending) | pending = 未验证邮箱 |
 | balance | numeric(20,8) | 账户余额（按量计费 / 插件消费） |
@@ -69,13 +69,13 @@ PostgreSQL 17 + Drizzle。所有表使用 `uuid` 主键（`gen_random_uuid()`，
 
 ### sessions
 
-管理端需要"强制下线"能力，所以会话存库（用户端可只用加密 cookie）。
+管理端需要"强制下线"能力，所以会话统一存库；cookie 里只放会话标识。
 
 | 列 | 类型 |
 |---|---|
 | id | uuid pk |
 | user_id | uuid → users |
-| token_hash | text unique |
+| session_token | text unique |
 | ip / user_agent | inet / text |
 | created_at / expires_at / last_seen_at | timestamptz |
 
@@ -170,7 +170,7 @@ id pk, order_id, gateway varchar(32), amount numeric, status enum(pending, succe
 
 ### 配额判定（唯一真理）
 
-判定逻辑集中在 `server/utils/quota.ts`：
+判定逻辑集中在 `lib/quota.ts`：
 
 ```
 expired   = expire_at <= now()
@@ -268,22 +268,59 @@ user_id, date, upload, download, total, node_count int —— 复合主键 `(use
 | 列 | 类型 | 说明 |
 |---|---|---|
 | id | uuid pk | |
-| key | varchar(64) unique | 插件标识 |
+| key | varchar(64) unique | 插件标识，来自 manifest |
 | name | varchar(128) | |
-| version | varchar(32) | |
+| version | varchar(32) | 当前生效版本（展示用，不参与去重） |
 | type | enum(payment, node_source, subscription, notify, hook, ui) | |
-| source_type | enum(builtin, marketplace, url, upload) | |
-| source_url | text | 三方源地址 |
-| checksum | varchar(64) | 内容 sha256 |
-| manifest | jsonb | 声明的 hooks、权限、配置 schema |
+| source_type | enum(builtin, git, upload) | 社区插件固定为 `git` |
+| repo_url | text | 安装用的 git URL（已规范化，不含 ref） |
+| git_ref | varchar(128) | 安装时指定的 ref（tag/branch/sha），仅留档 |
+| commit_sha | char(40) | **实际安装的提交**，与 repo_url 共同构成插件身份 |
+| runtime | enum(process, container) | 默认 `process` |
+| entry | varchar(255) | 入口文件相对路径 |
+| build | enum(none, npm) | `npm` 需要在面板开启 `ALLOW_PLUGIN_BUILD` |
+| ui_mode | enum(schema, iframe, none) | 不允许注入主应用 bundle |
+| checksum | varchar(64) | 物化后目录树的 sha256 |
+| manifest | jsonb | 声明的 hooks / schedules / permissions / configSchema |
 | config | jsonb | 用户填写的配置（密钥字段加密） |
-| permissions | text[] | 申请的权限点 |
-| status | enum(installed, disabled, error) | |
+| permissions | text[] | manifest 申请的上限 |
+| granted_scopes | text[] | 管理员批准的实际授权（⊆ permissions） |
+| egress | text[] | 允许访问的出网域名 |
+| active_version | varchar(32) | 当前生效版本目录 |
+| previous_version | varchar(32) null | 回滚目标 |
+| health | enum(healthy, unhealthy, unknown) | 最近一次探活结果 |
+| last_health_at | timestamptz | |
+| status | enum(installed, disabled, error, installing) | |
 | installed_at / updated_at | timestamptz | |
+
+唯一约束：`(repo_url, commit_sha)`；索引：`key` unique、`status`、`(repo_url)`。
+插件文件落在 `data/plugins/{key}/{version}/`，只读；可写目录 `data/plugins/{key}/data/`。
 
 ### plugin_events
 
 id pk, plugin_id, hook varchar(64), status enum(success, error, timeout), duration_ms int, error text, payload jsonb, created_at
+
+### plugin_jobs（插件定时任务的物化表）
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| id | uuid pk | |
+| plugin_key | varchar(64) | `core.*` 表示核心内置任务 |
+| job_key | varchar(64) | 来自 manifest `schedules[].key` |
+| cron | varchar(64) | 5 段 cron，`tz` 可选 |
+| handler | varchar(128) | 执行器里的 handler 名 |
+| payload | jsonb | 静态入参 |
+| enabled | bool | 插件禁用/卸载时置 false |
+| next_run_at | timestamptz | 由 `nextCron(cron, now)` 计算，**重启后靠它续跑** |
+| last_run_at / last_status | timestamptz / enum(ok, failed, skipped, timeout) | |
+
+唯一键 `(plugin_key, job_key)`；索引 `(enabled, next_run_at)` 供 ticker 扫描。
+
+### plugin_job_runs（执行记录）
+
+id pk, job_id, run_id uuid unique（传给插件的幂等键）, started_at, finished_at, status enum(ok, failed, timeout, skipped), duration_ms, error text, result jsonb
+
+> 与 `task_runs` 的区别：`task_runs` 记录一次性耗时任务，`plugin_job_runs` 记录周期任务的每次触发，按 30 天裁剪。
 
 ### plugin_sources（三方源）
 
@@ -314,7 +351,9 @@ users ─┬─ orders ─── plans ─── plan_node_groups ─── node
        ├─ sessions
        └─ traffic_daily ─── traffic_logs(分区)
 
-plugins ─── plugin_events
+plugins ─┬─ plugin_events
+         ├─ plugin_jobs ─── plugin_job_runs
+         └─ plugin_sources
 settings / announcements / audit_logs / login_logs / task_runs / webhooks
 ```
 
@@ -333,5 +372,6 @@ settings / announcements / audit_logs / login_logs / task_runs / webhooks
 
 | 变量 | 用途 |
 |---|---|
-| `DATABASE_URL` | drizzle-kit（迁移 / seed）使用 |
-| `NUXT_DATABASE_URL` | Nitro 运行时使用（容器部署时注入这一个即可） |
+| `DATABASE_URL` | 运行时与 drizzle-kit 共用（迁移 / seed / 应用） |
+| `MASTER_KEY` | 节点私钥 / 插件密钥 / 2FA 密钥的加密主密钥 |
+| `NEXT_PUBLIC_SITE_URL` | 站点对外地址（生成订阅链接、支付回调地址） |

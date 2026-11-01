@@ -96,7 +96,7 @@ POST /api/v1/auth/login { email, password }
  → 返回（Cache-Control: private, max-age=60）
 ```
 
-渲染器是纯函数：`render(subscription, nodes, format) → string`，放在 `server/utils/subscription/`，插件可通过 `subscription.render` hook 覆盖。
+渲染器是纯函数：`render(subscription, nodes, format) → string`，放在 `lib/subscription/`，插件可通过 `subscription.render` hook 覆盖。
 
 ### 4.2 节点可见性
 
@@ -109,7 +109,7 @@ POST /api/v1/auth/login { email, password }
 
 ```
 Agent 每 30s 上报 per-user 流量 → 进程内计数器累加
- → traffic:flush（1min）批量 UPSERT traffic_daily，更新 subscriptions.traffic_used
+ → traffic:flush（30s）批量 UPSERT traffic_daily，更新 subscriptions.traffic_used
  → 用户端/管理端读取 traffic_used 与 traffic_limit 计算进度
  → 超过 traffic_limit：标记超量，节点侧拒绝新连接（通过下发规则）
 ```
@@ -159,13 +159,16 @@ Agent 每 30s 上报 per-user 流量 → 进程内计数器累加
  → 触发缓存失效（相关订阅的渲染缓存）
 ```
 
-### 6.3 插件安装
+### 6.3 插件安装（git URL）
 
 ```
-插件管理 → 「从三方源安装」→ 选择源 → 浏览列表 → 查看权限与 manifest → 确认安装
- → 下载 → 校验 sha256/签名 → 解包 → 校验 manifest → 写入 plugins 表
- → 生成配置表单（configSchema）→ 管理员填写配置 → 启用
- → 调用健康检查 → 状态变「已安装」
+插件管理 → 「安装插件」→ 粘贴 git URL（可带 #ref / ?subdir=）
+ → 「预览」：解析 manifest，展示申请的权限、出网域名、是否签名、版本兼容性
+ → 管理员逐条确认权限 → 确认安装
+ → 后台任务：resolve sha → clone → 校验 manifest → 物化到 data/plugins/{key}/{version}
+ → 生成 token（scope = 已批准的权限）→ 启动进程 → /healthz 通过
+ → 状态「已安装」→ 填配置（configSchema 生成的表单）→ 启用
+失败 → 清理临时目录，保留上一个版本，task_run 记录错误
 ```
 
 ## 7. 通知触点

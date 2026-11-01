@@ -1,7 +1,0 @@
-{
-  "name": "@sparrow/config",
-  "version": "0.1.0",
-  "private": true,
-  "description": "共享的 TypeScript / 工程配置",
-  "files": ["tsconfig.base.json", "eslint.base.mjs"]
-}

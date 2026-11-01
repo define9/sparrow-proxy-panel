@@ -1,17 +1,11 @@
 {
   "version": 1,
   "skills": {
-    "nuxt": {
-      "source": "onmax/nuxt-skills",
+    "shadcn": {
+      "source": "shadcn-ui/ui",
       "sourceType": "github",
-      "skillPath": "skills/nuxt/SKILL.md",
-      "computedHash": "b6be0d9140c9fffa04f0519f2900e69793bac303597ed9a8e92c7a9008b59e40"
-    },
-    "nuxt-ui": {
-      "source": "nuxt/ui",
-      "sourceType": "github",
-      "skillPath": "skills/nuxt-ui/SKILL.md",
-      "computedHash": "deacd4aed537a3744e99618dcca2d7258aff871697d3f0c78be49ba731e60907"
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "b864a958765563321f485a96f4d59c0bb6539f4286ab6d8b8b66895b7ebd302d"
     }
   }
 }

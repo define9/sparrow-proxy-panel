@@ -1,248 +1,226 @@
 # 前端架构
 
-## 1. 基线对齐官方 Dashboard 模板
-
-`src/panel/` 的前端以 `nuxt-ui-templates/dashboard` 为基线，保留其目录约定、样式基线、组件用法与工程配置，差异只在业务域。
+## 1. 目录结构
 
 ```
-src/panel/app/
-├── app.vue                     # UApp + NuxtLoadingIndicator + NuxtLayout
-├── app.config.ts               # ui.colors / ui.icons / ui.prose 全局默认
-├── assets/css/main.css         # @import "tailwindcss" theme(static); @import "@nuxt/ui";
+src/panel/
+├── app/
+│   ├── layout.tsx                 # <html> + ThemeProvider + NextIntlClientProvider + Toaster
+│   ├── globals.css                # Tailwind 4 + shadcn CSS 变量（见 design-system）
+│   ├── (marketing)/page.tsx       # 首页
+│   ├── (auth)/login|register|forgot-password/page.tsx
+│   ├── (user)/
+│   │   ├── layout.tsx             # Sidebar + Header（用户端）
+│   │   └── dashboard/{page,plans,orders,subscriptions,traffic,settings}
+│   ├── (admin)/
+│   │   ├── layout.tsx             # 同上，菜单按权限
+│   │   └── admin/{page,plans,orders,subscriptions,nodes,users,plugins,logs,settings}
+│   ├── api/v1/**/route.ts         # REST 接口
+│   └── sub/[token]/route.ts       # 订阅输出（纯文本）
 ├── components/
-│   ├── common/                 # 跨业务通用（DataTable/StateBadge/QuotaBar/...）
-│   ├── auth/                   # 登录注册相关
-│   ├── plan/  order/  subscription/  node/  user/  plugin/  log/
-├── composables/
-│   ├── useApi.ts               # 统一 $fetch 封装（错误提示、鉴权头）
-│   ├── useAuth.ts              # 登录态、权限判断（useUserPermissions）
-│   ├── usePagination.ts        # keyset 分页状态
-│   ├── useFormatters.ts        # 金额/流量/时间格式化（Intl）
-│   └── useNotifications.ts     # 站内信 + toast 封装
-├── layouts/
-│   ├── default.vue             # 营销/公开页（UHeader + UMain + UFooter）
-│   ├── auth.vue                # 登录注册（居中单栏）
-│   ├── dashboard.vue           # 用户端（UDashboardGroup + Sidebar）
-│   └── admin.vue               # 管理端（同上，菜单按权限不同）
-├── middleware/
-│   ├── auth.global.ts          # 全局：未登录跳登录页；已登录访问登录页跳仪表盘
-│   ├── admin.ts                # 管理端：角色校验
-│   └── guest.ts
-├── pages/
-│   ├── index.vue               # 首页
-│   ├── (auth)/login.vue  register.vue  forgot-password.vue
-│   ├── dashboard/index.vue  plans/  orders/  subscriptions/  traffic/  settings/
-│   └── admin/index.vue  plans/  orders/  subscriptions/  nodes/  users/  plugins/  logs/  settings/
-├── types/                      # 全局 TS 类型（模板已有，扩展）
-└── utils/                      # 纯函数（模板已有，扩展）
+│   ├── ui/                        # shadcn 生成物（可改，但改动需同步 design-system）
+│   ├── common/                    # DataTable / StateBadge / QuotaBar / CopyButton / EmptyState
+│   ├── layout/                    # AppSidebar / NavUser / CommandPalette / Breadcrumbs
+│   └── plan|order|subscription|node|user|plugin|log/
+├── lib/
+│   ├── db/                        # Drizzle client + schema
+│   ├── services/                  # 服务层（页面与 route handler 共用，唯一业务入口）
+│   ├── api/                       # 客户端 fetch 封装 + query keys
+│   ├── auth/                      # auth.config、permissions、requirePermission
+│   ├── quota.ts · crypto.ts · rate-limit.ts
+│   ├── subscription/ · node/ · plugin-host/ · jobs/
+│   └── navigation.ts              # 菜单数据模型（见 navigation.md）
+├── hooks/                         # use-permissions / use-shortcuts / use-formatters
+├── messages/{zh-CN,en}.json
+├── middleware.ts                  # 只做"无 cookie 快速重定向"
+└── drizzle/                       # 迁移文件
 ```
+
+**`components/ui` 是项目自己的代码**（shadcn 的 copy-in 思路），可以改；但任何改动都要落在 [design-system](design-system.md) 的约定里，否则 CLI 重新生成时会冲突。业务定制优先写在 `components/common/` 的 wrapper 里。
 
 ## 2. 布局与路由
 
-| 路由段 | layout | 鉴权 | 说明 |
+| 路由组 | layout | 鉴权 | 说明 |
 |---|---|---|---|
-| `/` | `default` | 公开 | 首页、商品介绍、公告 |
-| `/login` `/register` `/forgot-password` | `auth` | 游客 | 已登录自动跳 `/dashboard` |
-| `/dashboard/**` | `dashboard` | 用户 | 用户中心 |
-| `/admin/**` | `admin` | 管理员 | 管理后台 |
-| `/sub/{token}` | — | token | 订阅输出（纯文本，非页面） |
+| `(marketing)` | 根 layout | 公开 | 首页、商品介绍、公告 |
+| `(auth)` | 居中单栏 | 游客 | 已登录访问自动跳 `/dashboard` |
+| `(user)` | Sidebar + Header | 登录 | 用户中心 |
+| `(admin)` | 同上，菜单不同 | 权限点 | 管理后台 |
+| `app/sub/[token]/route.ts` | — | token | 订阅输出（非页面） |
 
 约定：
-- 页面组件必须 `definePageMeta({ layout: 'dashboard' })`，不靠嵌套路由隐式继承
-- 用户端与管理端**布局分离**，菜单与守卫独立，避免越权页面泄露结构
-- 公开页 `routeRules: { '/': { prerender: true } }` 静态化
 
-## 3. 布局实现要点（全部用 Nuxt UI 原生组件）
+- **鉴权权威判断在 layout**：`const session = await requireSession()`。数据库会话查库，edge runtime 跑不了，所以不在 middleware 里做
+- `middleware.ts` 只做快速路径：没有 session cookie 且访问 `/(user|admin)` → 跳登录并带 `?next=`；真正的越权判断交给 layout 与 route handler
+- 用户端与管理端 **layout 分离**，菜单与守卫独立，避免越权页面泄露结构
 
-### 3.1 用户端 / 管理端侧边栏
+### 渲染策略：后台不 SSR
 
-```vue
-<!-- app/layouts/dashboard.vue -->
-<template>
-  <UDashboardGroup unit="rem">
-    <UDashboardSidebar id="user-sidebar" v-model:open="open" collapsible resizable>
-      <template #header="{ collapsed }">
-        <AppLogo :collapsed="collapsed" />
-      </template>
-
-      <template #default="{ collapsed }">
-        <UDashboardSearchButton :collapsed="collapsed" class="bg-transparent ring-default" />
-
-        <UNavigationMenu
-          :collapsed="collapsed"
-          :items="navItems"          <!-- 见 navigation.md，已按权限过滤 -->
-          orientation="vertical"
-          tooltip
-          popover
-        />
-      </template>
-
-      <template #footer="{ collapsed }">
-        <UserMenu :collapsed="collapsed" />
-      </template>
-    </UDashboardSidebar>
-
-    <UDashboardSearch :groups="searchGroups" />   <!-- Cmd+K 命令面板 -->
-
-    <slot />
-  </UDashboardGroup>
-</template>
-```
-
-要点：
-- `UNavigationMenu` 必须传 `:collapsed="collapsed"`，折叠时自动只显示图标
-- 嵌套菜单用 `children` + `type: 'trigger'`（模板的 Settings 分组写法）
-- `UDashboardGroup` 负责侧边栏尺寸与折叠状态持久化（cookie）
-- 移动端 `mode` 默认 slideover，`UDashboardNavbar` 自带汉堡按钮
-
-### 3.2 页面骨架
-
-每个业务页统一为 `UDashboardPanel` + `#header`（`UDashboardNavbar` + `UDashboardToolbar`）+ `#body`：
-
-```vue
-<template>
-  <UDashboardPanel id="admin-nodes">
-    <template #header>
-      <UDashboardNavbar :title="t('admin.nodes.title')">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
-        <template #right>
-          <UButton :icon="iRefresh" :label="t('common.refresh')" color="neutral" variant="ghost" />
-          <UButton :icon="iPlus" :label="t('common.create')" @click="openCreate" />
-        </template>
-      </UDashboardNavbar>
-
-      <UDashboardToolbar>
-        <template #left>
-          <UInput v-model="q" icon="i-lucide-search" :placeholder="t('common.search')" class="w-64" />
-        </template>
-        <template #right>
-          <USelect v-model="status" :items="statusOptions" />
-        </template>
-      </UDashboardToolbar>
-    </template>
-
-    <template #body>
-      <UTable :data="rows" :columns="columns" :loading="status === 'pending'">
-        <template #empty>
-          <UEmpty :icon="iServerOff" :title="t('common.empty')" />
-        </template>
-      </UTable>
-    </template>
-  </UDashboardPanel>
-</template>
-```
-
-### 3.3 布局选择原则
-
-| 场景 | 选择 | 理由 |
+| 页面 | 渲染方式 | 数据来源 |
 |---|---|---|
-| 列表 + 详情 | `UDashboardPanel` 双栏 + `UDashboardResizeHandle` | 原生可拖拽分隔 |
-| 表单弹窗 | `UModal` | 轻量操作 |
-| 详情侧栏 | `USlideover` | 需要看列表上下文时 |
-| 移动端底部操作 | `UDrawer` | 触达友好 |
-| 确认删除 | `UModal` + `useOverlay` | 原生 overlay 上下文 |
-| 分步下单 | `UStepper` | 原生步骤条 |
-| 营销首页 | `UPageHero` / `UPageSection` / `UPageGrid` / `UPricingPlans` | 官方页面级组件 |
-| 公告 | `UBanner`（全局）/ `UMarquee`（滚动） | 原生 |
-| 长列表 | `UScrollArea` | 原生虚拟滚动容器 |
+| `(user)` / `(admin)` 全部页面 | **CSR**（页面是 client component） | 客户端 TanStack Query → `/api/v1` |
+| `(marketing)` 首页 / 商品 / 公告 | RSC 或 ISR（`revalidate = 60`），只为 SEO | 服务层直连 |
+| `(auth)` | CSR | `/api/v1/auth/*` |
+| `app/sub/[token]` | route handler | 纯文本 |
 
-## 4. 数据获取
+后台不走 SSR 的理由：
 
-统一封装 `useApi`，统一错误提示与鉴权：
+- 没有 SEO 需求，SSR 只是把"首屏等数据"从前端请求换成服务端查库，复杂度换不来价值
+- 筛选、分页、弹窗、批量操作本来就是客户端状态，SSR 之后还是要 hydration
+- 唯一的 RSC 用途是**根 layout 读 cookie 注入初始会话**，避免登录态闪一下——这不是页面渲染，只省一次请求
 
-```ts
-// app/composables/useApi.ts
-export function useApi() {
-  return {
-    api: $fetch.create({
-      onResponseError({ response }) {
-        // 统一 toast；401 → 跳登录
-      }
-    })
-  }
+约定：
+
+- 页面文件默认可写 `'use client'`；只有明确要 SEO 的公开页保持 server component
+- 客户端一律走 TanStack Query，不写 `useEffect + fetch`
+- 首屏用 `<Suspense>` + `Skeleton`，不要全屏 spinner
+- 仍然是 `output: 'standalone'` 的 Node 服务，**不能** `output: 'export'`（API routes 需要服务端）
+
+## 3. 布局实现（shadcn Sidebar）
+
+```tsx
+// app/(admin)/layout.tsx
+import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
+import { AppSidebar } from '@/components/layout/app-sidebar'
+import { CommandPalette } from '@/components/layout/command-palette'
+
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const session = await requirePermission('admin:dashboard:read')
+
+  return (
+    <SidebarProvider>
+      <AppSidebar nav={adminNav} permissions={session.permissions} />
+      <SidebarInset>
+        <header className="flex h-14 items-center gap-2 border-b px-4">
+          <SidebarTrigger />
+          <Breadcrumbs />
+        </header>
+        <main className="p-4 lg:p-6">{children}</main>
+      </SidebarInset>
+      <CommandPalette nav={adminNav} permissions={session.permissions} />
+    </SidebarProvider>
+  )
 }
 ```
 
+要点：
+
+- `SidebarProvider` 负责折叠状态与移动端抽屉，折叠态用 `SidebarMenuButton tooltip`
+- 嵌套菜单用 `SidebarMenuSub`（节点、插件两组）
+- `SidebarInset` 自带移动端留白，不要再手写断点类
+- 页面骨架统一：`PageHeader`（标题 + 操作按钮）+ 内容区，不逐个页面重复 flex 布局
+
+### 场景 → shadcn 组件
+
+| 场景 | 组件 |
+|---|---|
+| 列表 + 详情 | 双栏 `ResizablePanel`，或 `DataTable` + `Sheet` 详情抽屉 |
+| 表单弹窗 | `Dialog` |
+| 需要看列表上下文的详情 | `Sheet` |
+| 移动端底部操作 | `Drawer` |
+| 确认删除 | `AlertDialog` |
+| 分步下单 | 自建 `Stepper`（Tabs 语义 + `Progress`） |
+| 长列表筛选 | `DataTable` + `Popover` + `Command`（多选过滤） |
+
+## 4. 数据获取（关键约定）
+
+| 场景 | 方式 |
+|---|---|
+| 后台页面所有读 | 客户端 TanStack Query → `/api/v1/...` |
+| 公开页（首页/商品） | Server Component 直接调 `lib/services/*`（可选，为 SEO） |
+| 写操作 | `useMutation` → 成功后 `invalidateQueries` + `toast` |
+| 纯 UI 的服务端变更 | Server Action（仅限不进入跨端契约的操作） |
+
 约定：
-- SSR 首屏数据用 `useAsyncData` / `useFetch`（带 key），客户端交互用 `$fetch`
-- 管理端列表统一 `useLazyFetch` + `watch` 触发器（避免重复请求）
-- 所有列表接口返回 `{ data, meta }`，组件只关心 `data` 与 `meta.total`
-- 加载态用 `status === 'pending' || status === 'idle'`（`idle` 覆盖首次渲染前）
 
-## 5. 表格模式（UTable）
+- **页面与 route handler 都调 `lib/services/*`**，两边都不写 SQL；服务层是唯一的业务入口
+- `/api/v1` 是唯一对外接口面（前端、Agent、PAT 共用）
+- query key 集中在 `lib/api/keys.ts`：`['orders', { status, cursor }]`
+- 错误统一在 `lib/api/client.ts` 处理：解析 `{ statusCode, code, message }`，401 跳登录，其余 toast
+- 列表接口统一返回 `{ data, meta }`；组件只关心 `data` 与 `meta.nextCursor`
 
-统一封装 `<DataTable>` 组件（`app/components/common/DataTable.vue`），封装列定义、加载态、空态、分页：
+```ts
+// 交互式列表的标准写法
+const { data, isPending } = useQuery({
+  queryKey: keys.orders({ status, cursor }),
+  queryFn: () => api.get('/api/v1/admin/orders', { status, cursor })
+})
+```
 
-```vue
-<script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui'
+## 5. 表格（TanStack Table + shadcn Data Table）
 
-const columns: TableColumn[] = [
-  { accessorKey: 'name', header: t('admin.nodes.name') },
-  { accessorKey: 'status', header: t('common.status') },
-  { id: 'actions' }
+统一封装 `components/common/data-table.tsx`，负责加载态、空态、分页、列可见性：
+
+```tsx
+const columns: ColumnDef<Order>[] = [
+  { accessorKey: 'orderNo', header: t('order.no') },
+  { accessorKey: 'amount', header: t('order.amount'), cell: ({ row }) => <Money value={row.original.amount} /> },
+  { accessorKey: 'status', header: t('common.status'), cell: ({ row }) => <StateBadge status={row.original.status} /> },
+  { id: 'actions', cell: ({ row }) => <OrderActions order={row.original} /> }
 ]
-</script>
 ```
 
-- `UTable` 基于 TanStack Table v8（`@nuxt/ui` 自带依赖），无需单独安装
-- 行内操作统一放 `UDropdownMenu`（`items` 嵌套数组自动分组）
-- 状态列用 `UBadge`（见 [design-system](design-system.md)）
-- 服务端分页：`UPagination` 的 `total` 是**条目数**不是页数
-- 多选：`v-model:row-selection` + 表头三态 `UCheckbox`（`'indeterminate'`）
+- 服务端分页：游标来自 `meta.nextCursor`，不要在前端做全量分页
+- 行操作统一放 `DropdownMenu`，不要横排一堆按钮
+- 多选：`rowSelection` + 表头三态 `Checkbox`
+- 超过 200 行开 `useVirtualizer`，否则直接渲染
 
-## 6. 表单模式（UForm）
+## 6. 表单（react-hook-form + zod + shadcn Form）
 
-```vue
-<UForm :schema="schema" :state="state" @submit="onSubmit">
-  <UFormField :label="t('field.email')" name="email" required>
-    <UInput v-model="state.email" type="email" icon="i-lucide-mail" class="w-full" />
-  </UFormField>
+```tsx
+const form = useForm<LoginInput>({ resolver: zodResolver(loginSchema), defaultValues })
 
-  <UFormField :label="t('field.password')" name="password" required>
-    <UInput v-model="state.password" type="password" icon="i-lucide-lock" class="w-full" />
-  </UFormField>
-
-  <UButton type="submit" :loading="loading" block>{{ t('auth.login') }}</UButton>
-</UForm>
+<Form {...form}>
+  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <FormField name="email" render={({ field }) => (
+      <FormItem>
+        <FormLabel>{t('field.email')}</FormLabel>
+        <FormControl><Input type="email" {...field} /></FormControl>
+        <FormMessage />
+      </FormItem>
+    )} />
+    <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+      {t('auth.login')}
+    </Button>
+  </form>
+</Form>
 ```
 
-- 校验用 **zod**（与 `packages/contracts` 同一套 schema），Nuxt UI 的 `UForm` 支持 Standard Schema，zod 原生兼容
-- 后端返回的字段级错误通过 `setErrors` 回填
-- 提交中禁用按钮，失败用 `useToast` 提示
+- schema 来自 `@sparrow/contracts`，前后端同一份，不在前端重写校验
+- 服务端 422 的字段错误用 `form.setError(field, { message })` 回填
+- `FormMessage` 自带 `aria-describedby`，不要手写错误 `<p>`
 
 ## 7. 状态管理
 
 | 场景 | 方案 |
 |---|---|
-| 跨组件的小状态（侧边栏折叠、通知面板） | `createSharedComposable`（模板的 `useDashboard` 写法） |
-| 跨页面状态（当前用户、权限） | `useState` + `useUserPermissions` |
-| 服务端数据 | `useAsyncData` / `useFetch`（自带缓存与去重） |
-| 表单状态 | 局部 `reactive` / `ref` |
-| 复杂客户端状态 | **不引入 Pinia**（见 tech-stack 决策） |
+| 服务端数据 | TanStack Query（默认，后台全部页面） / RSC 直取（仅公开页） |
+| 会话与权限 | layout 通过 props 下传，`hooks/use-permissions.ts` 提供 `can()` |
+| 局部 UI 状态 | `useState` / `useReducer` |
+| 主题 | `next-themes` |
+| 语言 | `next-intl` |
+| 侧边栏折叠 | `SidebarProvider` 自带（cookie 持久化） |
+
+不引入 Redux / Zustand；出现真实跨页客户端状态时再局部引入，见 [tech-stack §8](../architecture/tech-stack.md)。
 
 ## 8. 组件与业务域映射
 
-| 业务 | 原生组件 |
+| 业务 | 组件 |
 |---|---|
-| 商品列表 | `UPricingPlans` `UPricingPlan` `UPricingTable` `UBadge`（标签） |
-| 下单流程 | `UStepper` `UModal`（确认）`UAlert`（提示） |
-| 订单列表 | `UTable` + `UBadge`（状态） + `UTimeline`（详情流转） |
-| 订单详情 | `UDashboardPanel` 双栏 + `UBreadcrumb` + `UTimeline` |
-| 订阅管理 | `UTable` + `UProgress`（流量占比）+ `UChip`（客户端格式）+ `UInputTags`（IP 白名单） |
-| 订阅链接 | `UInput`（readonly）+ `UButton`（复制）+ `UModal`（二维码） |
-| 流量图表 | `@tanstack/charts`（Nuxt UI 无原生图表组件） |
-| 节点管理 | `UTable` + `UTabs`（按节点组）+ `UTree`（节点组层级）+ `USlideover`（编辑） |
-| 节点状态 | `UBadge`（在线/离线/维护）+ `UProgress`（负载） |
-| 证书管理 | `UFileUpload` + `UInputDate`（到期） + `UAlert`（临期告警） |
-| 用户管理 | `UTable` + `UDropdownMenu` + `USlideover`（详情/会话） |
-| 插件管理 | `UTable` + `UModal`（安装向导）+ `UTabs`（详情/配置/日志）+ `UForm`（schema 自动生成） |
-| 日志 | `UTable` + `UDashboardToolbar`（筛选）+ `UBadge`（级别） + `UScrollArea`（详情） |
-| 个人设置 | `UTabs` + `UForm` + `ULocaleSelect` + `UColorModeSelect` |
-| 全局公告 | `UBanner` + `UMarquee` |
-| 通知 | `useToast` + `NotificationsSlideover`（模板已有） |
+| 商品列表 | `Card` + `Badge` + 自建 `PricingCard` |
+| 下单流程 | 自建 `Stepper` + `Dialog` 确认 + `Alert` 提示 |
+| 订单列表 | `DataTable` + `StateBadge` + `Sheet`（详情） |
+| 订单详情 | 双栏 + `Breadcrumb` + 时间线（自建 `ol`，不要引第三方） |
+| 订阅管理 | `DataTable` + `Progress`（流量占比）+ `CopyButton` + `Dialog`（二维码） |
+| 订阅链接 | `Input readOnly` + 复制按钮 + 二维码弹窗 |
+| 流量图表 | shadcn `Chart`（Recharts） |
+| 节点管理 | `DataTable` + `Tabs`（按组）+ `Tree`（组层级，自建递归）+ `Sheet` 编辑 |
+| 节点状态 | `StateBadge` + `Progress`（负载） |
+| 证书 | `Input type=file` + `Calendar`（到期）+ `Alert`（临期） |
+| 用户管理 | `DataTable` + `DropdownMenu` + `Sheet`（详情/会话） |
+| 插件管理 | `DataTable` + `Dialog`（安装向导）+ `Tabs` + 动态表单 |
+| 日志 | `DataTable` + 筛选栏 + `Sheet`（详情） |
+| 个人设置 | `Tabs` + 表单 + 语言/主题切换 |
 
 ## 9. 契约变更流程
 
@@ -251,25 +229,25 @@ const columns: TableColumn[] = [
 ```
 1. 改 packages/contracts/src/**/*.ts 的 zod schema（唯一真相）
 2. pnpm gen            # 生成 openapi.json + Go client（src/agent/internal/client/api.gen.go）
-3. pnpm gen:diff      # CI 校验：重新生成后 git diff 必须为空
+3. pnpm gen:diff       # CI 校验：重新生成后 git diff 必须为空
 4. 更新服务端实现与前端类型
 5. 更新共享测试向量（HMAC 签名、字段名）
 6. 提交（schema 与生成物必须在同一个 commit）
 ```
 
 CI 门禁：
-- `pnpm gen && git diff --exit-code` —— 生成物漂移即失败
-- `pnpm typecheck`、`pnpm lint`、`pnpm test`
-- 契约破坏性变更检测：对比新旧 openapi，已删除/改名字段 → CI 报错，需显式标注
+
+- `pnpm gen && git diff --exit-code`（生成物漂移即失败）
+- `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`
+- 破坏性变更检测：对比新旧 openapi，删除/改名字段必须显式标注
 
 ## 10. 性能
 
 | 手段 | 说明 |
 |---|---|
-| SSR + 局部 hydration | 用户端首屏服务端渲染；管理端表格数据用 `useLazyFetch` 客户端拉取（避免 SSR 时阻塞） |
-| 图标本地化 | 安装 `@iconify-json/lucide` 离线包，杜绝图标 CDN 请求 |
-| 字体 | `@nuxt/fonts`（Nuxt UI 自动注册）+ 预加载字体，减少 FOUT |
-| 表格虚拟化 | 长列表用 `UTable` 的虚拟滚动（TanStack Virtual） |
-| 分包 | 图表库只在流量页动态 import（`defineAsyncComponent`） |
-| 缓存 | 商品列表、公告等公共接口带 `Cache-Control` |
-| 预取 | 关键路由用 `definePageMeta({ preload: ... })` 或 `<NuxtLink prefetch>` |
+| 首屏 | 根 layout 注入会话 + 页面 skeleton，**不发多余请求**；公开页 RSC/ISR 出 HTML |
+| 按需加载 | 图表、富文本编辑器用 `next/dynamic` 单独 chunk；图标按名 import |
+| 表格 | 服务端分页 + 只查需要的列；大数据量开虚拟滚动 |
+| 缓存 | 公开接口 `revalidate: 60`；订阅渲染 30s 内存缓存 |
+| 字体 | `next/font` 自托管 + `display: swap`，避免 FOUT |
+| 图片 | `next/image`，Logo 与二维码走同一套 |

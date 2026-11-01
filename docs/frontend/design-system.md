@@ -1,266 +1,201 @@
-# 设计系统与颜色体系
+# 设计系统
 
-原则：**只用 Nuxt UI 的语义化颜色（semantic colors），不写原生色值**。任何 `text-gray-500` / `bg-blue-600` 都视为违规（ESLint + code review 拦截）。
+原则：**只用 shadcn 的 CSS 变量语义类**（`bg-background` / `text-muted-foreground` / `border-border`）。
+业务代码里出现 `text-gray-500` / `bg-blue-600` 视为违规（ESLint + code review 拦截）。
 
-## 1. 颜色体系分层
+## 1. 三层结构
 
 ```
-第 1 层：Tailwind 调色板（仅在 app.config.ts / CSS @theme 中定义品牌色）
+第 1 层  原始色值（oklch）——只在 globals.css 的 :root / .dark 出现
    ↓
-第 2 层：Nuxt UI 语义 token（--ui-color-*，随明暗主题自动切换）
+第 2 层  CSS 变量（--background / --primary / …）——只在 globals.css 引用
    ↓
-第 3 层：组件 color 属性（primary / success / warning / error / neutral / info）
-   ↓
-第 4 层：语义化类名（text-default / text-muted / bg-elevated / border-muted）
+第 3 层  语义类（bg-background / text-muted-foreground / ring-ring）——业务代码只写这层
 ```
 
-业务代码只允许出现在第 3、4 层。
-
-## 2. 主题配置（app.config.ts）
-
-```ts
-// src/panel/app/app.config.ts
-export default defineAppConfig({
-  ui: {
-    // 主色与中性色（Nuxt UI 预置色板名）
-    colors: {
-      primary: 'green',
-      neutral: 'zinc'
-    },
-
-    // 全局默认图标
-    icons: {
-      loading: 'i-lucide-loader-circle',
-      close: 'i-lucide-x',
-      check: 'i-lucide-check',
-      chevronDown: 'i-lucide-chevron-down',
-      chevronRight: 'i-lucide-chevron-right',
-      arrowLeft: 'i-lucide-arrow-left',
-      arrowRight: 'i-lucide-arrow-right'
-    },
-
-    // 表格等组件的默认密度
-    table: { striped: false, loading: 'skeleton' }
-  }
-})
-```
-
-改主色只需改这一处，全站（含按钮、徽章、聚焦环、图表主色）自动跟随。
-
-## 3. 品牌色定制（Tailwind v4 @theme）
-
-若需要自定义品牌色（模板的绿色做法），在 CSS 中定义调色板，**不覆盖** Nuxt UI 的语义层：
+## 2. globals.css
 
 ```css
-/* src/panel/app/assets/css/main.css */
-@import "tailwindcss" theme(static);
-@import "@nuxt/ui";
+@import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
 
-@theme static {
-  --font-sans: 'Public Sans', sans-serif;
+:root {
+  --radius: 0.625rem;
 
-  /* 品牌绿（与 app.config.ts 的 primary: 'green' 对应） */
-  --color-green-50:  #EFFDF5;
-  --color-green-100: #D9FBE8;
-  /* … 一直到 950 */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --primary: oklch(0.55 0.16 155);          /* 品牌绿 */
+  --primary-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.577 0.245 27.3);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.55 0.16 155);
+
+  /* 项目扩展：shadcn 默认没有这三档 */
+  --success: oklch(0.62 0.17 150);
+  --warning: oklch(0.77 0.16 84);
+  --info: oklch(0.62 0.14 240);
+
+  --chart-1: var(--primary);
+  --chart-2: var(--info);
+  --chart-3: var(--success);
+  --chart-4: var(--warning);
+  --chart-5: var(--destructive);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  /* …对应暗色一套，色相不变、亮度反转… */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-chart-1: var(--chart-1);
+  --radius-lg: var(--radius);
+  --font-sans: var(--font-public-sans);
 }
 ```
 
-`theme(static)` 的作用：让 Tailwind 生成完整色阶（50–950）而不是只生成用到的几档，避免动态类名（如 `bg-green-${level}`）丢失。
+改主色只改 `--primary` 与 `--primary-foreground`（以及 `--ring`），按钮、徽章、聚焦环、图表主色自动跟随。
 
-## 4. 语义 token 速查
+## 3. 语义类速查
 
-| Token | 用途 | 典型场景 |
-|---|---|---|
-| `text-default` | 主要文字 | 正文、表格主列 |
-| `text-muted` | 次要文字 | 说明文字、辅助信息 |
-| `text-dimmed` | 弱化文字 | 占位符、禁用态 |
-| `text-highlighted` | 强调文字 | 数值、关键指标 |
-| `text-toned` | 柔和强调 | 标签内文字 |
-| `text-inverted` | 反色文字 | 深色底上的文字 |
-| `bg-default` | 页面底色 | 页面背景 |
-| `bg-elevated` | 抬升面 | 卡片、弹窗、下拉 |
-| `bg-accented` | 强调底 | 选中项、强调区块 |
-| `bg-muted` | 中性底 | 分割区块、表头 |
-| `bg-inverted` | 反色底 | 深色浮层 |
-| `border-default` | 默认边框 | 常规描边 |
-| `border-muted` | 弱边框 | 分割线 |
-| `border-accented` | 强调边框 | 选中态、聚焦态 |
-| `border-inverted` | 反色边框 | 深色浮层描边 |
+| 类 | 用途 |
+|---|---|
+| `bg-background` / `text-foreground` | 页面底、正文 |
+| `bg-card` / `text-card-foreground` | 卡片、弹窗 |
+| `bg-muted` / `text-muted-foreground` | 次要底 / 说明文字 |
+| `bg-accent` / `text-accent-foreground` | hover、选中项 |
+| `bg-primary` / `text-primary-foreground` | 主操作 |
+| `bg-destructive` | 危险操作 |
+| `border-border` / `border-input` | 常规描边 / 输入框 |
+| `ring-ring` | 聚焦环 |
+| `text-success` / `text-warning` / `text-info` | 项目扩展状态色 |
+| `bg-chart-1` … `bg-chart-5` | 图表 |
 
-> 完整清单见 `@nuxt/ui` 主题 CSS 变量 `--ui-text-*` / `--ui-bg-*` / `--ui-border-*`（v4.12）。
-> **不存在 `bg-soft`**——写错会被 `eslint-plugin-better-tailwindcss` 当场拦下。
+透明度写法：`bg-muted/50`、`text-muted-foreground/80`。
+**不存在 `bg-soft` / `text-dimmed`** 这类别的 UI 库的命名，写错会被 `eslint-plugin-better-tailwindcss` 当场拦下。
 
-透明度写法：`bg-elevated/25`、`text-muted/80`（模板侧边栏用的就是这个）。
+## 4. 明暗模式
 
-## 5. 明暗模式
+`next-themes`，class 策略，跟随系统：
 
-`@nuxtjs/color-mode` 由 `@nuxt/ui` **自动注册**，不要手动加进 `modules`。
-
-```ts
-// nuxt.config.ts
-export default defineNuxtConfig({
-  modules: ['@nuxt/ui'],
-  colorMode: {
-    preference: 'system',   // system | light | dark
-    classSuffix: '',
-    fallback: 'light'
-  }
-})
+```tsx
+// app/layout.tsx
+<html lang={locale} suppressHydrationWarning>
+  <body>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
 ```
 
-- `useColorMode()` 读取当前模式
-- 原生切换组件：`UColorModeButton`（单按钮）、`UColorModeSelect`（三态）、`UColorModeSwitch`、`UColorModeAvatar`、`UColorModeImage`
-- 自定义切换器必须用 `<ClientOnly>` 包裹，避免 SSR 水合不一致
-- `<html>` 上的 `theme-color` 随模式变化（在 `app.vue` 用 `useHead` 响应式设置）
+- `suppressHydrationWarning` 必须加在 `<html>` 上，否则主题切换报水合不一致
+- 切换器用 `DropdownMenu`（Light / Dark / System），图标要在 `useEffect` 挂载后再渲染，避免服务端与客户端不一致
+- 状态色只用 CSS 变量，**不要在图表里硬编码 `#00C16A`**，否则暗色模式失配
 
-```vue
-<script setup lang="ts">
-const colorMode = useColorMode()
-const themeColor = computed(() => colorMode.value === 'dark' ? '#0b0b0c' : 'white')
-useHead(() => ({ meta: [{ name: 'theme-color', content: themeColor.value }] }))
-</script>
-```
+## 5. 状态 → 颜色映射
 
-## 6. 状态 → 颜色映射（项目约定）
+状态色全项目统一，后台与用户端一致。封装成一个组件，避免各处手写 `if`：
 
-状态色必须全项目统一，后台与用户端一致。
-
-| 状态 | color | variant |
-|---|---|---|
-| 订单：待支付 | `warning` | `subtle` |
-| 订单：已支付 / 订阅：生效 | `success` | `subtle` |
-| 订单：已取消 | `neutral` | `subtle` |
-| 订单：已过期 | `neutral` | `outline` |
-| 订单：已退款 | `error` | `subtle` |
-| 节点：在线 | `success` | `subtle` |
-| 节点：离线 | `error` | `subtle` |
-| 节点：维护中 | `warning` | `subtle` |
-| 插件：已安装 / 运行中 | `success` | `subtle` |
-| 插件：已禁用 | `neutral` | `outline` |
-| 插件：错误 | `error` | `subtle` |
-| 用户：正常 | `success` | `subtle` |
-| 用户：封禁 | `error` | `subtle` |
-| 用户：未验证 | `warning` | `subtle` |
-| 日志级别：info / warn / error | `info` / `warning` / `error` | `subtle` |
-
-统一封装组件，避免各处手写颜色判断：
-
-```vue
-<!-- app/components/common/StateBadge.vue -->
-<script setup lang="ts">
-const props = defineProps<{ status: string }>()
-
-const MAP: Record<string, { color: 'success' | 'warning' | 'error' | 'neutral' | 'info', label: string }> = {
-  paid:       { color: 'success', label: 'order.status.paid' },
-  pending:    { color: 'warning', label: 'order.status.pending' },
-  online:     { color: 'success', label: 'node.status.online' },
-  offline:    { color: 'error',   label: 'node.status.offline' }
-}
-
-const conf = computed(() => MAP[props.status] ?? { color: 'neutral' as const, label: props.status })
-</script>
-
-<template>
-  <UBadge :color="conf.color" variant="subtle" :label="t(conf.label)" />
-</template>
-```
-
-## 7. 图表配色
-
-`@tanstack/charts` 不自带主题，需要与 Nuxt UI 色板对齐：
-
-```ts
-// app/utils/chart.ts
-export const chartColors = ['primary', 'info', 'success', 'warning', 'error']
-// 通过 CSS 变量取色，自动跟随明暗主题
-export const cssVar = (name: string) => `var(--ui-color-${name})`
-```
-
-不要在图表里硬编码 `#00C16A` 之类的值，否则暗色模式会失配。
-
-## 8. 字体
-
-`@nuxt/fonts`（Nuxt UI 自动注册）负责字体加载与自托管：
-
-```ts
-// nuxt.config.ts
-export default defineNuxtConfig({
-  fonts: {
-    families: [
-      { name: 'Public Sans', provider: 'google' }
-    ]
-  }
-})
-```
-
-```css
-@theme static {
-  --font-sans: 'Public Sans', sans-serif;
-}
-```
-
-数字展示（流量、金额、订单号）建议用 `font-mono` / `tabular-nums`，避免跳动：
-
-```vue
-<span class="font-mono tabular-nums">{{ formatBytes(traffic) }}</span>
-```
-
-## 9. 图标
-
-- 统一 `i-lucide-*` 格式，默认 lucide 集合
-- 安装本地包保证 SSR 与离线可用：`@iconify-json/lucide`、`@iconify-json/simple-icons`
-- 组件内用 `icon` prop（`UButton icon="i-lucide-plus"`），不用手写 `<UIcon>`
-- 图标命名在业务组件里抽成常量，避免散落字符串：
-
-```ts
-// app/utils/icons.ts
-export const icons = {
-  plan: 'i-lucide-package',
-  order: 'i-lucide-receipt',
-  subscription: 'i-lucide-rss',
-  node: 'i-lucide-server',
-  user: 'i-lucide-users',
-  plugin: 'i-lucide-plug',
-  log: 'i-lucide-scroll-text'
+```tsx
+// components/common/state-badge.tsx
+const styles = {
+  success: 'bg-success/12 text-success ring-success/20',
+  warning: 'bg-warning/12 text-warning ring-warning/20',
+  destructive: 'bg-destructive/12 text-destructive ring-destructive/20',
+  muted: 'bg-muted text-muted-foreground ring-border'
 } as const
+
+const MAP: Record<string, { tone: keyof typeof styles; label: string }> = {
+  paid: { tone: 'success', label: 'order.status.paid' },
+  pending: { tone: 'warning', label: 'order.status.pending' },
+  cancelled: { tone: 'muted', label: 'order.status.cancelled' },
+  online: { tone: 'success', label: 'node.status.online' },
+  offline: { tone: 'destructive', label: 'node.status.offline' }
+}
 ```
 
-## 10. 间距与圆角
+| 状态 | tone |
+|---|---|
+| 订单：待支付 / 已支付 / 已取消 / 已过期 / 已退款 | warning / success / muted / muted(描边) / destructive |
+| 订阅：生效 / 暂停 / 到期 / 取消 | success / warning / muted / muted |
+| 节点：在线 / 离线 / 维护中 | success / destructive / warning |
+| 插件：运行中 / 已禁用 / 错误 | success / muted / destructive |
+| 用户：正常 / 封禁 / 未验证 | success / destructive / warning |
+| 日志级别：info / warn / error | info / warning / destructive |
 
-Tailwind v4 默认尺度即可，不自定义。约定：
+## 6. 间距与圆角
 
 | 元素 | 规范 |
 |---|---|
-| 页面主容器 | `UDashboardPanel` 自带 padding，不额外加容器类 |
+| 圆角 | 用 `--radius`（`rounded-lg` 即跟随），不逐个覆盖 |
+| 页面容器 | `<main className="p-4 lg:p-6">`，不额外套 max-width |
 | 卡片间距 | `gap-4` / `gap-6` |
-| 表单字段间距 | `space-y-4` |
-| 表格单元格 | `UTable` 默认密度；密集模式用 `size="sm"` |
-| 圆角 | 跟随组件默认（`rounded-lg`），不逐个覆盖 |
+| 表单字段 | `space-y-4` |
+| 表格密度 | 默认；密集模式给单元格 `py-1.5` |
 
-## 11. ESLint 约束
+数字（流量、金额、订单号）用 `font-mono tabular-nums`，避免数值刷新时宽度跳动。
 
-模板已配 `eslint-plugin-better-tailwindcss`（类名排序），追加自定义规则：
+## 7. 图标
+
+- 统一 `lucide-react`，按名 import：`import { Plus } from 'lucide-react'`
+- 尺寸用 `className="size-4"`（不要 `h-4 w-4` 混用）
+- 图标在业务代码里抽成常量，避免到处写字面量：
+
+```ts
+// lib/icons.ts
+export { Package as PlanIcon, Receipt as OrderIcon, Rss as SubscriptionIcon, Server as NodeIcon } from 'lucide-react'
+```
+
+- 纯图标按钮必须有 `aria-label` 或 `sr-only` 文本
+
+## 8. 字体
+
+```tsx
+// app/layout.tsx
+import { Public_Sans } from 'next/font/google'
+const sans = Public_Sans({ subsets: ['latin'], variable: '--font-public-sans', display: 'swap' })
+```
+
+`globals.css` 里 `--font-sans: var(--font-public-sans)`，不再写 `@import` 外链字体。
+
+## 9. 可访问性
+
+- 焦点、键盘、ARIA 由 Radix 保证，**不要用 `div` 模拟按钮**
+- `Dialog` / `Sheet` 必须有 `DialogTitle`（可 `sr-only`），否则读屏器不播报
+- 表单错误由 `FormMessage` 提供 `aria-describedby`，不要自己写 `<p class="text-red-500">`
+- 语义 token 已保证明暗两套对比度；新增状态色需自测 WCAG AA
+- 表格行操作用 `DropdownMenu`（自带键盘操作），不要 `<div onClick>`
+
+## 10. ESLint
 
 ```js
-// src/panel/eslint.config.mjs
+// eslint.config.mjs（追加）
 {
   rules: {
-    // 禁止原生调色板类名（bg-blue-500 等），强制语义 token
+    // 禁止原生调色板类名，强制语义变量
     'no-restricted-syntax': ['error', {
-      selector: "CallExpression[callee.name='$tw']",
-      message: '请使用 Nuxt UI 语义颜色（text-default / bg-elevated / color="primary"）'
+      selector: "Literal[value=/(text|bg|border)-(gray|zinc|slate|blue|green|red)-\\d{2,3}/]",
+      message: '请使用语义类（bg-background / text-muted-foreground / bg-success）'
     }]
   }
 }
 ```
 
-> 实际实现可用 `eslint-plugin-tailwindcss` 的 `no-restricted-classes` 或自定义正则规则实现；落地时按实际插件能力调整。
-
-## 12. 可访问性（Reka UI 免费获得）
-
-- 焦点环、键盘导航、ARIA 由组件保证，**不要用 `div` 模拟按钮**
-- 图标按钮必须有 `aria-label`
-- 表单错误用 `UFormField` 的 `error` 槽，配合 `aria-describedby`
-- 对比度：语义 token 已保证，明暗两套都通过 WCAG AA
-- 表格操作列用 `UDropdownMenu`（自带键盘操作），不要自定义 `<div @click>`
+排序规则由 `eslint-plugin-better-tailwindcss` 负责，落地时按其实际能力调整选择器。

@@ -4,13 +4,13 @@
 
 ### 公开
 
-| 路径 | 页面 | 说明 |
-|---|---|---|
-| `/` | 首页 | 商品、公告、节点状态概览 |
-| `/login` | 登录 | |
-| `/register` | 注册 | |
-| `/forgot-password` | 找回密码 | |
-| `/sub/{token}` | 订阅输出 | 纯文本接口（非 Vue 页面） |
+| 路径 | 页面 |
+|---|---|
+| `/` | 首页：商品、公告、节点状态概览 |
+| `/login` | 登录 |
+| `/register` | 注册 |
+| `/forgot-password` | 找回密码 |
+| `/sub/{token}` | 订阅输出（纯文本，route handler，不是页面） |
 
 ### 用户端 `/dashboard`
 
@@ -24,7 +24,7 @@
 | `/dashboard/subscriptions` | 订阅管理 | 登录 |
 | `/dashboard/subscriptions/{id}` | 订阅详情 | 登录 + 本人 |
 | `/dashboard/traffic` | 流量统计 | 登录 |
-| `/dashboard/settings` | 个人设置（Tab：资料 / 安全 / 通知 / 外观 / Token） | 登录 |
+| `/dashboard/settings` | 个人设置（Tabs：资料 / 安全 / 通知 / 外观 / Token） | 登录 |
 
 ### 管理端 `/admin`
 
@@ -40,222 +40,197 @@
 | `/admin/users` | 用户管理 | `admin:user:read` |
 | `/admin/plugins` | 插件管理 | `admin:plugin:read` |
 | `/admin/plugin-sources` | 三方源 | `admin:plugin:read` |
-| `/admin/logs` | 日志（Tab：审计 / 登录 / 任务 / 节点事件） | `admin:log:read` |
+| `/admin/logs` | 日志（Tabs：审计 / 登录 / 任务 / 节点事件） | `admin:log:read` |
 | `/admin/coupons` | 优惠券 | `admin:coupon:read` |
-| `/admin/settings` | 系统设置（Tab：站点 / 邮件 / 支付 / 公告 / 权限） | `admin:settings:read` |
+| `/admin/settings` | 系统设置（Tabs：站点 / 邮件 / 支付 / 公告 / 权限） | `admin:settings:read` |
 
-命名规则：**目录用复数**（`plans` / `orders` / `nodes`），与 `app/pages` 的文件路由一致；详情用动态段。
+命名规则：**目录用复数**（`plans` / `orders` / `nodes`），与 `app/` 目录一致；详情用动态段。URL 层级保持浅，不做 `/admin/nodes/groups/1/ports` 这种深嵌。
 
-## 2. 菜单数据模型
+## 2. 菜单是数据
 
-菜单是**数据**，不是硬编码的模板。它由「路由表 + 权限点 + i18n key」推导而来，保证三处永远一致。
+菜单由「路由表 + 权限点 + i18n key」推导，集中在一个文件，避免三处各写一遍。
 
 ```ts
-// app/utils/navigation.ts
+// lib/navigation.ts
+import type { LucideIcon } from 'lucide-react'
+
 export interface NavItem {
-  labelKey: string        // i18n key，如 'nav.plans'
-  icon: string            // i-lucide-*
-  to: string
-  permission?: string     // 需要的权限点（无则所有人可见）
+  labelKey: string          // i18n key，如 'nav.plans'
+  icon: LucideIcon
+  href: string
+  permission?: string       // 无值则所有人可见
   badge?: string | number
-  children?: NavItem[]
-  type?: 'trigger'        // 有 children 时为触发器
-  defaultOpen?: boolean
+  items?: NavItem[]         // 有子项即为可展开分组
 }
-```
 
-管理端菜单：
-
-```ts
 export const adminNav: NavItem[] = [
-  { labelKey: 'nav.dashboard', icon: 'i-lucide-gauge', to: '/admin' },
-  { labelKey: 'nav.plans',    icon: 'i-lucide-package', to: '/admin/plans', permission: 'admin:plan:read' },
-  { labelKey: 'nav.orders',   icon: 'i-lucide-receipt', to: '/admin/orders', permission: 'admin:order:read' },
-  { labelKey: 'nav.subscriptions', icon: 'i-lucide-rss', to: '/admin/subscriptions', permission: 'admin:subscription:read' },
+  { labelKey: 'nav.dashboard', icon: Gauge, href: '/admin' },
+  { labelKey: 'nav.plans', icon: Package, href: '/admin/plans', permission: 'admin:plan:read' },
+  { labelKey: 'nav.orders', icon: Receipt, href: '/admin/orders', permission: 'admin:order:read' },
+  { labelKey: 'nav.subscriptions', icon: Rss, href: '/admin/subscriptions', permission: 'admin:subscription:read' },
   {
-    labelKey: 'nav.nodes', icon: 'i-lucide-server', to: '/admin/nodes', permission: 'admin:node:read',
-    type: 'trigger', defaultOpen: true,
-    children: [
-      { labelKey: 'nav.nodeList',   icon: 'i-lucide-list', to: '/admin/nodes' },
-      { labelKey: 'nav.nodeGroups', icon: 'i-lucide-folder-tree', to: '/admin/nodes/groups' },
-      { labelKey: 'nav.certificates', icon: 'i-lucide-shield-check', to: '/admin/nodes/certificates' }
+    labelKey: 'nav.nodes', icon: Server, href: '/admin/nodes', permission: 'admin:node:read',
+    items: [
+      { labelKey: 'nav.nodeList', icon: List, href: '/admin/nodes' },
+      { labelKey: 'nav.nodeGroups', icon: FolderTree, href: '/admin/nodes/groups' },
+      { labelKey: 'nav.certificates', icon: ShieldCheck, href: '/admin/nodes/certificates' }
     ]
   },
-  { labelKey: 'nav.users',  icon: 'i-lucide-users', to: '/admin/users', permission: 'admin:user:read' },
+  { labelKey: 'nav.users', icon: Users, href: '/admin/users', permission: 'admin:user:read' },
   {
-    labelKey: 'nav.plugins', icon: 'i-lucide-plug', to: '/admin/plugins', permission: 'admin:plugin:read',
-    children: [
-      { labelKey: 'nav.pluginList',   icon: 'i-lucide-list', to: '/admin/plugins' },
-      { labelKey: 'nav.pluginSources', icon: 'i-lucide-cloud-download', to: '/admin/plugin-sources' }
+    labelKey: 'nav.plugins', icon: Plug, href: '/admin/plugins', permission: 'admin:plugin:read',
+    items: [
+      { labelKey: 'nav.pluginList', icon: List, href: '/admin/plugins' },
+      { labelKey: 'nav.pluginSources', icon: CloudDownload, href: '/admin/plugin-sources' }
     ]
   },
-  { labelKey: 'nav.logs',    icon: 'i-lucide-scroll-text', to: '/admin/logs', permission: 'admin:log:read' },
-  { labelKey: 'nav.settings', icon: 'i-lucide-settings', to: '/admin/settings', permission: 'admin:settings:read' }
+  { labelKey: 'nav.logs', icon: ScrollText, href: '/admin/logs', permission: 'admin:log:read' },
+  { labelKey: 'nav.settings', icon: Settings, href: '/admin/settings', permission: 'admin:settings:read' }
 ]
 ```
 
+图标用组件引用而非字符串（`lucide-react` 的 tree-shaking 依赖静态 import）。
+
 ## 3. 权限过滤
 
-权限点来自 `packages/contracts`，服务端在会话里下发当前用户的权限集合：
+权限点来自 `packages/contracts`，layout 从会话取到后下传，菜单在渲染前过滤：
 
 ```ts
-// app/composables/useAuth.ts
-export function useAuth() {
-  const user = useState<UserInfo | null>('auth:user', () => null)
-  const permissions = useState<string[]>('auth:permissions', () => [])
+// lib/auth/permissions.ts
+export function hasPermission(granted: string[], perm?: string) {
+  return !perm || granted.includes('*') || granted.includes(perm)
+}
 
-  const can = (perm?: string) => !perm || permissions.value.includes(perm) || permissions.value.includes('*')
-
-  return { user, permissions, can }
+export function filterNav(items: NavItem[], granted: string[]): NavItem[] {
+  return items
+    .map(item => ({ ...item, items: item.items ? filterNav(item.items, granted) : undefined }))
+    .filter(item => {
+      if (!hasPermission(granted, item.permission)) return false
+      // 父节点无子项残留（children 全被过滤掉且自身是分组）→ 保留为叶子
+      return true
+    })
 }
 ```
 
-```vue
-<!-- layouts/admin.vue -->
-<script setup lang="ts">
-const { can } = useAuth()
-const navItems = computed(() => filterNav(adminNav, can))
-</script>
+规则：自身无权限则整支移除；父节点无权限但子节点有权限时，父节点保留为纯分组（不带 `href`）。
 
-<template>
-  <UNavigationMenu :items="navItems" orientation="vertical" :collapsed="collapsed" tooltip popover />
-</template>
+```tsx
+// components/layout/app-sidebar.tsx
+const visible = filterNav(nav, permissions)
+
+<SidebarGroup>
+  {visible.map(item => (
+    <SidebarMenuItem key={item.href}>
+      <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={t(item.labelKey)}>
+        <Link href={item.href}><item.icon className="size-4" /><span>{t(item.labelKey)}</span></Link>
+      </SidebarMenuButton>
+      {item.items && <SidebarMenuSub>{/* … */}</SidebarMenuSub>}
+    </SidebarMenuItem>
+  ))}
+</SidebarGroup>
 ```
 
-`filterNav` 规则：自身无权限则整支子树移除；父节点无权限但子节点有权限时，父节点保留为纯分组。
+**后端是唯一权威**：菜单藏起来不代表接口安全，每个 route handler 仍走 `requirePermission`（见 [api-design §2](../architecture/api-design.md#2-鉴权模型)）。
 
-后端是唯一权威：即使前端菜单显示了，接口仍会 `requirePermission` 校验（见 [api-design](../architecture/api-design.md#2-鉴权模型)）。
+## 4. 路由守卫
 
-## 4. 命令面板（UDashboardSearch）
-
-侧边栏顶部放 `UDashboardSearchButton`，对应 `UDashboardSearch`（Nuxt UI 原生命令面板）。分组内容：
+分三层，各管一件事：
 
 ```ts
-const searchGroups = computed(() => [
-  {
-    id: 'pages',
-    label: t('search.pages'),
-    items: visibleNav.map(item => ({
-      label: t(item.labelKey),
-      icon: item.icon,
-      onSelect: () => navigateTo(item.to)
-    }))
-  },
-  {
-    id: 'actions',
-    label: t('search.actions'),
-    items: [
-      { label: t('action.createNode'), icon: 'i-lucide-plus', onSelect: () => navigateTo('/admin/nodes?create=1') },
-      { label: t('action.createPlan'), icon: 'i-lucide-plus', onSelect: () => navigateTo('/admin/plans?create=1') }
-    ]
-  },
-  {
-    id: 'users',
-    label: t('search.users'),
-    items: userShortcuts.map(u => ({
-      label: u.email,
-      icon: 'i-lucide-user',
-      onSelect: () => navigateTo(`/admin/users?q=${u.email}`)
-    }))
+// middleware.ts —— 只做快速重定向，不查库
+export function middleware(req: NextRequest) {
+  const hasSession = req.cookies.has('spx_session')
+  const isPrivate = /^\/(dashboard|admin)(\/|$)/.test(req.nextUrl.pathname)
+
+  if (isPrivate && !hasSession) {
+    const url = new URL('/login', req.url)
+    url.searchParams.set('next', req.nextUrl.pathname)
+    return NextResponse.redirect(url)
   }
-])
+}
+
+export const config = { matcher: ['/dashboard/:path*', '/admin/:path*'] }
 ```
-
-权限过滤同样适用：`visibleNav` 走 `filterNav`。
-
-## 5. 面包屑与标签页
-
-- 面包屑用 `UBreadcrumb`，由路由 meta 提供：
 
 ```ts
-definePageMeta({
-  breadcrumb: [{ label: 'admin.nodes.title', icon: 'i-lucide-server', to: '/admin/nodes' }]
-})
+// lib/auth/guard.ts —— 权威判断，在 layout 里调用
+export async function requirePermission(perm: string) {
+  const session = await getSession()
+  if (!session?.user) redirect('/login')
+  if (!hasPermission(session.permissions, perm)) forbidden()   // 或 redirect('/dashboard')
+  return session
+}
 ```
 
-- 同级子页面（订单详情、订阅详情）用 `UTabs` 或直接单页，不做多层嵌套路由（后台系统保持 URL 浅）
+- middleware 只读 cookie，**不查数据库**：Next middleware 跑在 edge runtime，`pg` 用不了
+- layout 的 `requireSession()` 才是真相；页面里的对象级权限（本人订单/订阅）由服务层校验
+- 已登录访问 `/login` 由 `(auth)/layout.tsx` 反查并跳 `/dashboard`
+
+## 5. 命令面板
+
+侧边栏顶部放搜索按钮（视觉上是 `SidebarMenuButton`，实际触发 `CommandDialog`），`⌘K` 打开：
+
+```tsx
+const groups = [
+  { id: 'pages', heading: t('search.pages'), items: visibleNav.map(i => ({ label: t(i.labelKey), icon: i.icon, onSelect: () => router.push(i.href) })) },
+  { id: 'actions', heading: t('search.actions'), items: [
+    { label: t('action.createNode'), icon: Plus, onSelect: () => router.push('/admin/nodes?create=1') },
+    { label: t('action.createPlan'), icon: Plus, onSelect: () => router.push('/admin/plans?create=1') }
+  ] }
+]
+```
+
+- `CommandDialog`（shadcn）= Radix Dialog + cmdk，键盘上下选择与回车开箱可用
+- 分组用 `CommandGroup`，图标用 `CommandItem` 里的 children
+- 过滤同样走 `filterNav`；不要为命令面板单独维护一份菜单
 
 ## 6. 快捷键
 
-用 `@vueuse/nuxt` 的 `defineShortcuts`（Nuxt UI 组件也用它）：
+用 `react-hotkeys-hook`，集中在一个 hook 里注册：
 
 ```ts
-// app/composables/useDashboard.ts（沿用模板写法）
-export const useDashboard = createSharedComposable(() => {
-  const router = useRouter()
-
-  defineShortcuts({
-    'g-d': () => router.push('/admin'),
-    'g-n': () => router.push('/admin/nodes'),
-    'g-u': () => router.push('/admin/users'),
-    'g-p': () => router.push('/admin/plans'),
-    'g-o': () => router.push('/admin/orders'),
-    'meta_k': () => searchRef?.open(),      // 与命令面板联动
-    'n': () => notificationsOpen.value = !notificationsOpen.value
-  })
-})
+// hooks/use-shortcuts.ts
+useHotkeys('mod+k', () => setCommandOpen(v => !v))
+useHotkeys('g>d', () => router.push('/admin'))
+useHotkeys('g>n', () => router.push('/admin/nodes'))
+useHotkeys('g>u', () => router.push('/admin/users'))
 ```
 
-菜单项用 `kbds` 展示提示，并用 `extractShortcuts` 自动注册：
+- 默认 `enableOnFormTags: false`，避免在输入框里打字触发跳转
+- `g>d` 是 `react-hotkeys-hook` 的顺序键语法，不用自己维护计时器
+- 菜单项上的快捷键提示用 `<kbd>` 展示（`SidebarMenuButton` 的 trailing 位置）
 
-```ts
-const items = [{ label: t('action.create'), kbds: ['meta', 'n'], onSelect: () => open() }]
-defineShortcuts(extractShortcuts(items))
-```
+## 7. 用户菜单（侧边栏底部）
 
-## 7. 顶部/底部用户菜单
-
-`UDashboardSidebar` 的 `#footer` 放 `UserMenu`（模板已有结构），内容：
+`NavUser` 组件放在 `SidebarFooter`，内容是 `DropdownMenu`：
 
 | 项 | 行为 |
 |---|---|
-| 头像 + 用户名 + 角色 | 跳转个人设置 |
-| 主题 | `UColorModeSelect`（light / dark / system） |
-| 语言 | `ULocaleSelect` |
+| 头像 + 用户名 + 角色 | 跳个人设置 |
+| 主题 | 子菜单 light / dark / system（`next-themes`） |
+| 语言 | 子菜单 简体中文 / English（写 cookie + `router.refresh()`） |
 | 个人设置 | `/dashboard/settings` |
 | 管理后台 | `/admin`（仅管理员可见） |
-| 退出登录 | `POST /api/v1/auth/logout` → 跳登录页 |
+| 退出登录 | `POST /api/v1/auth/logout` → 跳 `/login` |
 
 ## 8. 移动端
 
-- `UDashboardSidebar` 移动端默认 `mode="slideover"`，由 `UDashboardNavbar` 的内置按钮唤起
-- 侧边栏折叠状态在桌面端持久化（`UDashboardGroup storage="cookie"`）
-- 表格在窄屏用 `UTable` 自带的响应式（隐藏次要列）或切换为卡片列表（`<UScrollArea>` + 卡片）
-- 表格工具栏 `UDashboardToolbar` 在窄屏纵向排列（组件默认行为，不额外写断点类）
+- 侧边栏在 `<768px` 自动变抽屉，由 `SidebarTrigger` 唤起（`SidebarProvider` 内置，不要自己写 Sheet）
+- 折叠状态持久化到 cookie，由 `SidebarProvider` 负责
+- 表格在窄屏隐藏次要列（`ColumnDef.meta.hiddenOnMobile`），或切换成卡片列表
+- 页面头部操作按钮收敛进 `DropdownMenu`，不要挤成一行
 
-## 9. 导航守卫
-
-```ts
-// app/middleware/auth.global.ts
-export default defineNuxtRouteMiddleware((to) => {
-  const { user, can } = useAuth()
-
-  if (!user.value) {
-    // 公开页放行；其余跳登录并带 redirect
-    if (to.path.startsWith('/dashboard') || to.path.startsWith('/admin')) {
-      return navigateTo(`/login?redirect=${encodeURIComponent(to.fullPath)}`)
-    }
-    return
-  }
-
-  if (to.path.startsWith('/admin') && !can('admin:dashboard:read')) {
-    return navigateTo('/dashboard')
-  }
-})
-```
-
-服务端渲染时用户信息由 `app/middleware` 或 `app/plugins/session.server.ts` 注入 `useState('auth:user')`，避免客户端二次请求。
-
-## 10. 菜单与权限的单一来源
+## 9. 单一来源
 
 | 内容 | 位置 | 谁生成 |
 |---|---|---|
-| 路由 | `app/pages/**` | 文件路由 |
-| 菜单 | `app/utils/navigation.ts` | 手工维护（带权限点与 i18n key） |
+| 路由 | `app/**/page.tsx` | 文件系统 |
+| 菜单 | `lib/navigation.ts` | 手工维护（带权限点与 i18n key） |
 | 权限点 | `packages/contracts/src/permissions.ts` | 手工维护 |
-| 后端校验 | `server/api/admin/**` | `requirePermission(...)` |
+| 后端校验 | `app/api/v1/admin/**/route.ts` | `requirePermission(...)` |
 
-三处通过**相同的权限点字符串**关联；CI 提供脚本校验：
+四处通过**相同的权限点字符串**关联，CI 提供脚本校验：
+
 - 菜单里用到的权限点必须在 `permissions.ts` 中存在
 - `requirePermission` 用到的权限点必须存在
 - `permissions.ts` 中定义的权限点应至少被一处使用（避免死代码）
