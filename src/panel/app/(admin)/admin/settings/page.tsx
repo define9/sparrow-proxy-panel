@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CreditCard, Save, Send, ShieldCheck } from 'lucide-react'
+import { CreditCard, Save, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,27 +9,87 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/page-header'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  allPermissionPoints,
-  emailSettings,
-  paymentChannels,
-  registrationSettings,
-  roleMatrix,
-  siteSettings
-} from '@/lib/mock/admin-ops'
+import { useAdminSettings, useSaveSettings, type SettingsDto } from '@/lib/api/admin'
+import { allPermissionPoints, roleMatrix } from '@/lib/mock/admin-ops'
+
+type Section = 'site' | 'register' | 'payment' | 'mail'
+type SaveMutation = ReturnType<typeof useSaveSettings>
 
 export default function AdminSettingsPage() {
-  const [site, setSite] = useState(siteSettings)
-  const [registration, setRegistration] = useState(registrationSettings)
-  const [channels, setChannels] = useState(paymentChannels)
-  const [email, setEmail] = useState(emailSettings)
+  const { data, isLoading, isError, error } = useAdminSettings()
+  const save = useSaveSettings()
+
+  if (isLoading) {
+    return (
+      <>
+        <PageHeader title="系统设置" description="站点信息、注册策略、支付渠道、邮件与角色权限" />
+        <Skeleton className="h-96 w-full" />
+      </>
+    )
+  }
+
+  if (isError || !data) {
+    return (
+      <>
+        <PageHeader title="系统设置" description="站点信息、注册策略、支付渠道、邮件与角色权限" />
+        <p className="text-sm text-destructive">
+          加载失败：{isError ? (error as Error).message : '设置数据为空'}
+        </p>
+      </>
+    )
+  }
+
+  return <SettingsForm initial={data} save={save} />
+}
+
+function SettingsForm({ initial, save }: { initial: SettingsDto; save: SaveMutation }) {
+  const [site, setSite] = useState<SettingsDto['site']>(initial.site)
+  const [registration, setRegistration] = useState<SettingsDto['register']>(initial.register)
+  const [payment, setPayment] = useState<SettingsDto['payment']>(initial.payment)
+  const [mail, setMail] = useState<SettingsDto['mail']>(initial.mail)
   const [smtpPassword, setSmtpPassword] = useState('')
 
-  function save(section: string) {
-    toast.success(`${section}已保存（演示，不会真正落库）`)
+  function persist(label: string, body: Partial<SettingsDto>) {
+    save.mutate(body, {
+      onSuccess: () => toast.success(`${label}已保存`),
+      onError: (mutationError) => toast.error(`保存失败：${mutationError.message}`)
+    })
+  }
+
+  function saveSection(section: Section, label: string) {
+    if (section === 'site') persist(label, { site })
+    if (section === 'register') persist(label, { register: registration })
+    if (section === 'payment') persist(label, { payment })
+    if (section === 'mail') {
+      persist(label, {
+        mail: {
+          host: mail.host,
+          port: Number(mail.port) || 465,
+          username: mail.username,
+          password: smtpPassword
+        }
+      })
+      setSmtpPassword('')
+    }
+  }
+
+  function saveAll() {
+    persist('系统设置', {
+      site,
+      register: registration,
+      payment,
+      mail: {
+        host: mail.host,
+        port: Number(mail.port) || 465,
+        username: mail.username,
+        password: smtpPassword
+      }
+    })
+    setSmtpPassword('')
   }
 
   return (
@@ -38,7 +98,7 @@ export default function AdminSettingsPage() {
         title="系统设置"
         description="站点信息、注册策略、支付渠道、邮件与角色权限"
         actions={
-          <Button variant="outline" onClick={() => save('全部设置')}>
+          <Button variant="outline" onClick={saveAll} disabled={save.isPending}>
             <Save data-icon="inline-start" />
             保存全部
           </Button>
@@ -94,6 +154,12 @@ export default function AdminSettingsPage() {
                   onChange={(event) => setSite({ ...site, icp: event.target.value })}
                 />
               </Field>
+              <div>
+                <Button onClick={() => saveSection('site', '站点设置')} disabled={save.isPending}>
+                  <Save data-icon="inline-start" />
+                  保存站点设置
+                </Button>
+              </div>
             </FieldGroup>
           </div>
         </TabsContent>
@@ -130,7 +196,10 @@ export default function AdminSettingsPage() {
                   inputMode="numeric"
                   value={String(registration.giftTrafficGb)}
                   onChange={(event) =>
-                    setRegistration({ ...registration, giftTrafficGb: Number(event.target.value) || 0 })
+                    setRegistration({
+                      ...registration,
+                      giftTrafficGb: Number(event.target.value) || 0
+                    })
                   }
                 />
                 <FieldDescription>新用户注册后自动到账的体验流量，填 0 表示不赠送。</FieldDescription>
@@ -138,63 +207,70 @@ export default function AdminSettingsPage() {
               <Field orientation="horizontal">
                 <Switch
                   id="registration-invite"
-                  checked={registration.inviteOnly}
-                  onCheckedChange={(checked) => setRegistration({ ...registration, inviteOnly: checked })}
+                  checked={registration.inviteRequired}
+                  onCheckedChange={(checked) =>
+                    setRegistration({ ...registration, inviteRequired: checked })
+                  }
                 />
                 <FieldContent>
                   <FieldLabel htmlFor="registration-invite">仅邀请码注册</FieldLabel>
                   <FieldDescription>开启后注册必须填写有效邀请码。</FieldDescription>
                 </FieldContent>
               </Field>
+              <div>
+                <Button onClick={() => saveSection('register', '注册设置')} disabled={save.isPending}>
+                  <Save data-icon="inline-start" />
+                  保存注册设置
+                </Button>
+              </div>
             </FieldGroup>
           </div>
         </TabsContent>
 
         <TabsContent value="payment" className="pt-4">
           <div className="grid max-w-3xl gap-4">
-            {channels.map((channel) => (
-              <Card key={channel.id}>
-                <CardHeader>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <CreditCard data-icon="inline-start" className="size-4 text-muted-foreground" />
-                      <CardTitle className="text-base">{channel.name}</CardTitle>
-                      <Badge variant={channel.mode === '生产' ? 'success' : 'outline'}>{channel.mode}</Badge>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">
-                        {channel.enabled ? '已启用' : '已停用'}
-                      </span>
-                      <Switch
-                        checked={channel.enabled}
-                        aria-label={`${channel.name} 启用开关`}
-                        onCheckedChange={(checked) =>
-                          setChannels((current) =>
-                            current.map((item) =>
-                              item.id === channel.id ? { ...item, enabled: checked } : item
-                            )
-                          )
-                        }
-                      />
-                    </div>
+            <Card>
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CreditCard data-icon="inline-start" className="size-4 text-muted-foreground" />
+                    <CardTitle className="text-base">易支付</CardTitle>
+                    <Badge variant="outline">epay</Badge>
                   </div>
-                  <CardDescription>{channel.summary}</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-wrap items-end justify-between gap-4">
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {channel.fields.map((field) => (
-                      <div key={field.label} className="flex flex-col gap-0.5">
-                        <span className="text-xs text-muted-foreground">{field.label}</span>
-                        <span className="font-mono text-xs break-all">{field.value}</span>
-                      </div>
-                    ))}
+                  <Switch
+                    checked={payment.epayEnabled}
+                    aria-label="易支付启用开关"
+                    onCheckedChange={(checked) => setPayment({ ...payment, epayEnabled: checked })}
+                  />
+                </div>
+                <CardDescription>聚合网关渠道开关，商户密钥由支付插件配置。</CardDescription>
+              </CardHeader>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CreditCard data-icon="inline-start" className="size-4 text-muted-foreground" />
+                    <CardTitle className="text-base">Stripe</CardTitle>
+                    <Badge variant="outline">stripe</Badge>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => toast.success(`打开 ${channel.name} 配置`)}>
-                    配置
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                  <Switch
+                    checked={payment.stripeEnabled}
+                    aria-label="Stripe 启用开关"
+                    onCheckedChange={(checked) => setPayment({ ...payment, stripeEnabled: checked })}
+                  />
+                </div>
+                <CardDescription>Stripe 渠道开关，API Key 与 Webhook 由支付插件配置。</CardDescription>
+              </CardHeader>
+            </Card>
+
+            <div>
+              <Button onClick={() => saveSection('payment', '支付设置')} disabled={save.isPending}>
+                <Save data-icon="inline-start" />
+                保存支付设置
+              </Button>
+            </div>
           </div>
         </TabsContent>
 
@@ -206,8 +282,9 @@ export default function AdminSettingsPage() {
                   <FieldLabel htmlFor="smtp-host">SMTP 主机</FieldLabel>
                   <Input
                     id="smtp-host"
-                    value={email.host}
-                    onChange={(event) => setEmail({ ...email, host: event.target.value })}
+                    value={mail.host}
+                    onChange={(event) => setMail({ ...mail, host: event.target.value })}
+                    placeholder="smtp.example.com"
                   />
                 </Field>
                 <Field>
@@ -215,8 +292,8 @@ export default function AdminSettingsPage() {
                   <Input
                     id="smtp-port"
                     inputMode="numeric"
-                    value={email.port}
-                    onChange={(event) => setEmail({ ...email, port: event.target.value })}
+                    value={String(mail.port)}
+                    onChange={(event) => setMail({ ...mail, port: Number(event.target.value) || 0 })}
                   />
                 </Field>
               </div>
@@ -224,8 +301,8 @@ export default function AdminSettingsPage() {
                 <FieldLabel htmlFor="smtp-username">用户名</FieldLabel>
                 <Input
                   id="smtp-username"
-                  value={email.username}
-                  onChange={(event) => setEmail({ ...email, username: event.target.value })}
+                  value={mail.username}
+                  onChange={(event) => setMail({ ...mail, username: event.target.value })}
                 />
               </Field>
               <Field>
@@ -235,38 +312,15 @@ export default function AdminSettingsPage() {
                   type="password"
                   value={smtpPassword}
                   onChange={(event) => setSmtpPassword(event.target.value)}
-                  placeholder="••••••••"
+                  placeholder={mail.hasPassword ? '已设置，留空保持不变' : '••••••••'}
                   autoComplete="new-password"
                 />
-                <FieldDescription>留空表示保持原密码；密钥在服务端加密存储，接口不回显。</FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="smtp-from">发件人</FieldLabel>
-                <Input
-                  id="smtp-from"
-                  value={email.from}
-                  onChange={(event) => setEmail({ ...email, from: event.target.value })}
-                />
-              </Field>
-              <Field orientation="horizontal">
-                <Switch
-                  id="smtp-secure"
-                  checked={email.secure}
-                  onCheckedChange={(checked) => setEmail({ ...email, secure: checked })}
-                />
-                <FieldContent>
-                  <FieldLabel htmlFor="smtp-secure">启用 TLS</FieldLabel>
-                  <FieldDescription>465 端口通常需要开启，587 使用 STARTTLS。</FieldDescription>
-                </FieldContent>
+                <FieldDescription>留空表示保持原密码；接口不回显明文。</FieldDescription>
               </Field>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => save('邮件设置')}>
+                <Button onClick={() => saveSection('mail', '邮件设置')} disabled={save.isPending}>
                   <Save data-icon="inline-start" />
-                  保存
-                </Button>
-                <Button variant="outline" onClick={() => toast.success('测试邮件已发送，请检查收件箱')}>
-                  <Send data-icon="inline-start" />
-                  发送测试邮件
+                  保存邮件设置
                 </Button>
               </div>
             </FieldGroup>
@@ -330,7 +384,7 @@ export default function AdminSettingsPage() {
 
       <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur lg:-mx-6 lg:px-6">
         <span className="text-xs text-muted-foreground">保存后立即生效，敏感字段变更会记录审计日志。</span>
-        <Button onClick={() => save('系统设置')}>
+        <Button onClick={saveAll} disabled={save.isPending}>
           <Save data-icon="inline-start" />
           保存
         </Button>

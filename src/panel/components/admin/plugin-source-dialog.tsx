@@ -16,7 +16,15 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { pluginSourceTypeLabels, type SourceType } from '@/lib/mock/admin-ops'
+import type { PluginSourceDto } from '@/lib/api/admin'
+
+export type SourceType = PluginSourceDto['type']
+
+const pluginSourceTypeLabels: Record<SourceType, string> = {
+  url: 'HTTP JSON',
+  git: 'Git 仓库',
+  marketplace: '官方市场'
+}
 
 export interface NewSourceInput {
   name: string
@@ -28,7 +36,7 @@ export interface NewSourceInput {
 interface PluginSourceDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: (input: NewSourceInput) => void
+  onSubmit: (input: NewSourceInput) => Promise<void> | void
 }
 
 const PLACEHOLDER: Record<SourceType, string> = {
@@ -42,6 +50,7 @@ export function PluginSourceDialog({ open, onOpenChange, onSubmit }: PluginSourc
   const [type, setType] = useState<SourceType>('url')
   const [url, setUrl] = useState('')
   const [enabled, setEnabled] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
 
   const invalid = Boolean(url.trim()) && !/^https:\/\//.test(url.trim())
 
@@ -115,12 +124,19 @@ export function PluginSourceDialog({ open, onOpenChange, onSubmit }: PluginSourc
             取消
           </Button>
           <Button
-            disabled={!name.trim() || !url.trim() || invalid}
-            onClick={() => {
-              onSubmit({ name: name.trim(), type, url: url.trim(), enabled })
-              toast.success(`已创建索引源「${name.trim()}」`)
-              reset()
-              onOpenChange(false)
+            disabled={!name.trim() || !url.trim() || invalid || submitting}
+            onClick={async () => {
+              setSubmitting(true)
+              try {
+                await onSubmit({ name: name.trim(), type, url: url.trim(), enabled })
+                toast.success(`已创建索引源「${name.trim()}」`)
+                reset()
+                onOpenChange(false)
+              } catch (error) {
+                toast.error((error as Error).message)
+              } finally {
+                setSubmitting(false)
+              }
             }}
           >
             <Plus data-icon="inline-start" />

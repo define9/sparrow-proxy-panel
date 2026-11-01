@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Save } from 'lucide-react'
 import { toast } from 'sonner'
+import type { CouponDto } from '@/lib/api/admin'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,55 +16,74 @@ import {
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { CouponType } from '@/lib/mock/admin-ops'
 
-export interface NewCouponInput {
+export type CouponType = CouponDto['type']
+
+export interface CouponFormInput {
   code: string
   type: CouponType
   value: number
-  total: number
-  minAmount: string
-  expiresAt: string
+  quota: number
+  minAmount: number
+  expiresAt: string | null
 }
 
 interface CouponDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: (input: NewCouponInput) => void
+  onSubmit: (input: CouponFormInput) => Promise<void> | void
+  /** 传入表示编辑，不传表示新建 */
+  initial?: CouponDto | null
 }
 
-export function CouponDialog({ open, onOpenChange, onSubmit }: CouponDialogProps) {
-  const [code, setCode] = useState('')
-  const [type, setType] = useState<CouponType>('fixed')
-  const [value, setValue] = useState('10')
-  const [total, setTotal] = useState('100')
-  const [minAmount, setMinAmount] = useState('0.00')
-  const [expiresAt, setExpiresAt] = useState('')
+function toDateInput(iso: string | null) {
+  if (!iso) return ''
+  return new Date(iso).toISOString().slice(0, 10)
+}
 
-  function reset() {
-    setCode('')
-    setType('fixed')
-    setValue('10')
-    setTotal('100')
-    setMinAmount('0.00')
-    setExpiresAt('')
-  }
+export function CouponDialog({ open, onOpenChange, onSubmit, initial = null }: CouponDialogProps) {
+  const editing = Boolean(initial)
+  const [code, setCode] = useState(initial?.code ?? '')
+  const [type, setType] = useState<CouponType>(initial?.type ?? 'fixed')
+  const [value, setValue] = useState(initial ? String(Number(initial.value)) : '10')
+  const [quota, setQuota] = useState(initial ? String(initial.quota) : '100')
+  const [minAmount, setMinAmount] = useState(initial ? String(Number(initial.minAmount)) : '0.00')
+  const [expiresAt, setExpiresAt] = useState(toDateInput(initial?.expiresAt ?? null))
+  const [submitting, setSubmitting] = useState(false)
 
   const invalidValue = !Number.isFinite(Number(value)) || Number(value) <= 0
   const invalidCode = Boolean(code) && !/^[A-Z0-9-]{3,24}$/.test(code)
 
+  async function submit() {
+    setSubmitting(true)
+    try {
+      await onSubmit({
+        code: code.trim().toUpperCase(),
+        type,
+        value: Number(value),
+        quota: Number(quota) || 0,
+        minAmount: Number(minAmount || 0),
+        expiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59`).toISOString() : null
+      })
+      toast.success(editing ? `已更新优惠券 ${code.trim().toUpperCase()}` : `已创建优惠券 ${code.trim().toUpperCase()}`)
+      onOpenChange(false)
+    } catch (error) {
+      toast.error((error as Error).message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) reset()
-        onOpenChange(next)
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>创建优惠券</DialogTitle>
-          <DialogDescription>优惠券码全站唯一，创建后可在订单结算时抵扣。</DialogDescription>
+          <DialogTitle>{editing ? '编辑优惠券' : '创建优惠券'}</DialogTitle>
+          <DialogDescription>
+            {editing
+              ? '修改后的优惠券立即生效，已产生的抵扣不受影响。'
+              : '优惠券码全站唯一，创建后可在订单结算时抵扣。'}
+          </DialogDescription>
         </DialogHeader>
 
         <FieldGroup>
@@ -109,12 +129,12 @@ export function CouponDialog({ open, onOpenChange, onSubmit }: CouponDialogProps
 
           <div className="grid grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="coupon-total">数量</FieldLabel>
+              <FieldLabel htmlFor="coupon-total">数量（0 = 不限）</FieldLabel>
               <Input
                 id="coupon-total"
                 inputMode="numeric"
-                value={total}
-                onChange={(event) => setTotal(event.target.value)}
+                value={quota}
+                onChange={(event) => setQuota(event.target.value)}
               />
             </Field>
             <Field>
@@ -136,6 +156,7 @@ export function CouponDialog({ open, onOpenChange, onSubmit }: CouponDialogProps
               value={expiresAt}
               onChange={(event) => setExpiresAt(event.target.value)}
             />
+            <FieldDescription>留空表示长期有效</FieldDescription>
           </Field>
         </FieldGroup>
 
@@ -144,23 +165,11 @@ export function CouponDialog({ open, onOpenChange, onSubmit }: CouponDialogProps
             取消
           </Button>
           <Button
-            disabled={!code.trim() || invalidCode || invalidValue || !expiresAt}
-            onClick={() => {
-              onSubmit({
-                code: code.trim(),
-                type,
-                value: Number(value),
-                total: Number(total) || 0,
-                minAmount: Number(minAmount || 0).toFixed(2),
-                expiresAt: new Date(`${expiresAt}T23:59:59`).toISOString()
-              })
-              toast.success(`已创建优惠券 ${code.trim()}`)
-              reset()
-              onOpenChange(false)
-            }}
+            disabled={!code.trim() || invalidCode || invalidValue || submitting}
+            onClick={submit}
           >
-            <Plus data-icon="inline-start" />
-            创建
+            {editing ? <Save data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
+            {editing ? '保存' : '创建'}
           </Button>
         </DialogFooter>
       </DialogContent>

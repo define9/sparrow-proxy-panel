@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Ban, MailWarning, UserPlus, Users } from 'lucide-react'
 import { toast } from 'sonner'
@@ -11,37 +11,58 @@ import { FilterBar } from '@/components/admin/filter-bar'
 import { PageHeader } from '@/components/common/page-header'
 import { QuotaBar } from '@/components/common/quota-bar'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { StatCard } from '@/components/common/stat-card'
 import { StateBadge } from '@/components/common/state-badge'
 import { UserSheet } from '@/components/admin/user-sheet'
 import { formatDate, formatMoney } from '@/lib/format'
-import { userSummary, users, type AdminUser, type UserRole, type UserStatus } from '@/lib/mock/admin-ops'
+import { useAdminUsers, type AdminUserDto } from '@/lib/api/admin'
 
-const roleLabels: Record<UserRole, string> = {
+const roleLabels: Record<string, string> = {
   user: '普通用户',
   admin: '管理员',
   superadmin: '超级管理员'
 }
 
+const statusBadge: Record<AdminUserDto['status'], string> = {
+  active: 'verified',
+  pending: 'unverified',
+  disabled: 'banned'
+}
+
+function roleLabel(user: AdminUserDto) {
+  return roleLabels[user.roleCode] ?? user.roleName ?? user.roleCode
+}
+
 export default function AdminUsersPage() {
   const [search, setSearch] = useState('')
-  const [role, setRole] = useState<'all' | UserRole>('all')
-  const [status, setStatus] = useState<'all' | UserStatus>('all')
-  const [active, setActive] = useState<AdminUser | null>(null)
+  const [debounced, setDebounced] = useState('')
+  const [role, setRole] = useState<'all' | string>('all')
+  const [status, setStatus] = useState<'all' | 'verified' | 'unverified' | 'banned'>('all')
+  const [page, setPage] = useState(1)
+  const [active, setActive] = useState<AdminUserDto | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
 
-  const data = useMemo(() => {
-    const keyword = search.trim().toLowerCase()
-    return users.filter((user) => {
-      const matchKeyword =
-        !keyword || user.email.toLowerCase().includes(keyword) || user.username.toLowerCase().includes(keyword)
-      const matchRole = role === 'all' || user.role === role
-      const matchStatus = status === 'all' || user.status === status
-      return matchKeyword && matchRole && matchStatus
-    })
-  }, [search, role, status])
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebounced(search.trim())
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
 
-  const columns: ColumnDef<AdminUser>[] = [
+  const { data, isLoading, isError, error } = useAdminUsers({
+    q: debounced,
+    role,
+    status,
+    page
+  })
+
+  const rows = data?.data ?? []
+  const total = data?.meta.total ?? 0
+  const pageSize = data?.meta.pageSize ?? 20
+
+  const columns: ColumnDef<AdminUserDto>[] = [
     {
       accessorKey: 'email',
       header: '邮箱',
@@ -49,22 +70,26 @@ export default function AdminUsersPage() {
     },
     { accessorKey: 'username', header: '用户名' },
     {
-      accessorKey: 'role',
+      accessorKey: 'roleCode',
       header: '角色',
       cell: ({ row }) => (
         <Badge
           variant={
-            row.original.role === 'superadmin' ? 'default' : row.original.role === 'admin' ? 'info' : 'secondary'
+            row.original.roleCode === 'superadmin'
+              ? 'default'
+              : row.original.roleCode === 'admin'
+                ? 'info'
+                : 'secondary'
           }
         >
-          {roleLabels[row.original.role]}
+          {roleLabel(row.original)}
         </Badge>
       )
     },
     {
       accessorKey: 'status',
       header: '状态',
-      cell: ({ row }) => <StateBadge status={row.original.status} />
+      cell: ({ row }) => <StateBadge status={statusBadge[row.original.status]} />
     },
     {
       accessorKey: 'balance',
@@ -77,6 +102,11 @@ export default function AdminUsersPage() {
       id: 'traffic',
       header: '已用流量',
       cell: ({ row }) => <QuotaBar used={row.original.trafficUsed} limit={row.original.trafficLimit} />
+    },
+    {
+      id: 'subscriptions',
+      header: '订阅',
+      cell: ({ row }) => <span className="font-mono text-sm tabular-nums">{row.original.subscriptionCount}</span>
     },
     {
       accessorKey: 'createdAt',
@@ -108,13 +138,15 @@ export default function AdminUsersPage() {
     }
   ]
 
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+
   return (
     <>
       <PageHeader
         title="用户管理"
-        description="查看用户资料、会话与用量，处理余额、订阅与封禁（演示数据）"
+        description="查看用户资料、会话与用量，处理余额与封禁"
         actions={
-          <Button variant="outline" onClick={() => toast.success('已开始导出用户 CSV（演示）')}>
+          <Button variant="outline" onClick={() => toast.info('导出接口尚未提供')}>
             <Users data-icon="inline-start" />
             导出用户
           </Button>
@@ -122,14 +154,30 @@ export default function AdminUsersPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="总用户" value={userSummary.total.toLocaleString('zh-CN')} hint="含演示账号 12 个" icon={Users} />
-        <StatCard label="今日新增" value={String(userSummary.newToday)} hint="较昨日 +12.4%" icon={UserPlus} />
-        <StatCard label="封禁" value={String(userSummary.banned)} hint="近 7 天新增 1 个" icon={Ban} />
-        <StatCard label="未验证" value={String(userSummary.unverified)} hint="邮箱未完成验证" icon={MailWarning} />
+        <StatCard label="总用户" value={total.toLocaleString('zh-CN')} hint="当前筛选结果" icon={Users} />
+        <StatCard label="本页用户" value={String(rows.length)} hint={`每页 ${pageSize} 条`} icon={UserPlus} />
+        <StatCard
+          label="本页封禁"
+          value={String(rows.filter((row) => row.status === 'disabled').length)}
+          hint="可解封后恢复登录"
+          icon={Ban}
+        />
+        <StatCard
+          label="本页未验证"
+          value={String(rows.filter((row) => row.status === 'pending').length)}
+          hint="邮箱未完成验证"
+          icon={MailWarning}
+        />
       </div>
 
       <FilterBar search={search} onSearchChange={setSearch} placeholder="搜索邮箱或用户名">
-        <Select value={role} onValueChange={(value) => setRole(value as 'all' | UserRole)}>
+        <Select
+          value={role}
+          onValueChange={(value) => {
+            setRole(value)
+            setPage(1)
+          }}
+        >
           <SelectTrigger className="w-32" aria-label="角色筛选">
             <SelectValue />
           </SelectTrigger>
@@ -140,7 +188,13 @@ export default function AdminUsersPage() {
             <SelectItem value="superadmin">超级管理员</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={status} onValueChange={(value) => setStatus(value as 'all' | UserStatus)}>
+        <Select
+          value={status}
+          onValueChange={(value) => {
+            setStatus(value as typeof status)
+            setPage(1)
+          }}
+        >
           <SelectTrigger className="w-32" aria-label="状态筛选">
             <SelectValue />
           </SelectTrigger>
@@ -151,15 +205,40 @@ export default function AdminUsersPage() {
             <SelectItem value="banned">已封禁</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-xs text-muted-foreground">共 {data.length} 条</span>
+        <span className="text-xs text-muted-foreground">共 {total} 条</span>
       </FilterBar>
 
-      <DataTable
-        columns={columns}
-        data={data}
-        emptyTitle="没有匹配的用户"
-        emptyDescription="调整关键词或筛选条件后重试"
-      />
+      {isLoading ? (
+        <Skeleton className="h-80 w-full" />
+      ) : isError ? (
+        <p className="text-sm text-destructive">加载失败：{(error as Error).message}</p>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={rows}
+          emptyTitle="没有匹配的用户"
+          emptyDescription="调整关键词或筛选条件后重试"
+        />
+      )}
+
+      {total > pageSize ? (
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-xs text-muted-foreground">
+            第 {page} / {pageCount} 页
+          </span>
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            上一页
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= pageCount}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            下一页
+          </Button>
+        </div>
+      ) : null}
 
       <UserSheet user={active} open={sheetOpen} onOpenChange={setSheetOpen} />
     </>
