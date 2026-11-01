@@ -1,0 +1,35 @@
+# Sparrow Agent 配置示例
+# 复制到 /etc/sparrow-agent/config.yaml，权限 0600（含节点密钥）
+
+panel:
+  url: "https://panel.example.com"
+  # 由 `sparrow-agent register` 自动写入；也可用环境变量注入
+  node_id: ""
+  node_secret: ""
+
+core:
+  type: "sing-box"                       # sing-box | xray
+  binary: "/usr/local/bin/sing-box"
+  config_path: "/etc/sparrow-agent/core.json"
+  version_constraint: ">=1.12.0 <2.0.0"
+
+agent:
+  data_dir: "/var/lib/sparrow-agent"
+  heartbeat_interval: 30s
+  config_poll_interval: 300s
+  command_poll_timeout: 25s
+  max_backoff: 5m
+  log_level: "info"
+  log_file: "/var/log/sparrow-agent.log"
+
+tls:
+  ca_file: ""                            # 自签 CA
+  insecure: false
+  server_name: ""                        # 固定 SNI，防中间人
+
+update:
+  enabled: true
+  channel: "stable"                      # stable | beta
+  source: "panel"                        # panel | github | custom-url
+  custom_url: ""
+  public_key: ""                         # 自建源时的 ed25519 公钥

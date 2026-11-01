@@ -7,6 +7,9 @@
     "build": "pnpm --filter panel build",
     "start": "pnpm --filter panel start",
     "lint": "pnpm --filter panel lint",
-    "typecheck": "pnpm --filter panel typecheck"
+    "typecheck": "pnpm --filter panel typecheck",
+    "agent:build": "cd src/agent && make build",
+    "agent:test": "cd src/agent && go test ./...",
+    "agent:lint": "cd src/agent && make lint"
   }
 }
