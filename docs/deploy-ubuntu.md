@@ -143,28 +143,67 @@ docker compose exec -T postgres pg_restore -U sparrow -d sparrow --clean --if-ex
 
 `deploy/Caddyfile` 只是默认模板，删掉不影响面板。
 
-## 7. 节点服务器
+## 7. 节点接入（一条命令）
 
-节点是另一台机器，只要内核 + Agent 二进制（不需要 Docker/Node/DB）：
+面板自带 Agent 二进制分发：构建一次，之后每个节点一条命令装好并注册。
+
+### 7.1 在面板服务器上构建（每次升级 Agent 后重跑）
 
 ```bash
-# 内核（以 sing-box 为例）
-curl -fsSL https://sing-box.app/install.sh | sudo sh
+cd /opt/sparrow/app && sudo git pull
+cd deploy
+sudo ./build-agent.sh            # 用 golang 镜像交叉编译，宿主机不用装 Go
+sudo docker compose up -d panel  # 让挂载生效
+```
 
-# Agent
-cd /tmp && git clone git@github.com:define9/sparrow-proxy-panel.git
-cd sparrow-proxy-panel/src/agent && make build
-sudo install -m 755 bin/sparrow-agent /usr/local/bin/
+产物落在 `deploy/agent-dist/`（已 gitignore），通过面板的 `/agent/` 路径对外提供：
 
-# 注册（令牌在面板「节点管理 → 新建节点」）
-sudo mkdir -p /etc/sparrow-agent /var/lib/sparrow-agent
-sudo cp deploy/config.example.yaml /etc/sparrow-agent/config.yaml
-sudo sed -i 's#https://panel.example.com#https://你的域名#' /etc/sparrow-agent/config.yaml
-sudo sparrow-agent register -c /etc/sparrow-agent/config.yaml --url https://你的域名 --token <令牌>
+| 路径 | 内容 |
+|---|---|
+| `/agent/install.sh` | 安装脚本 |
+| `/agent/latest.json` | 版本 + 下载地址 + sha256 |
+| `/agent/sparrow-agent-linux-amd64` | 二进制（arm64 / armv7 同目录） |
 
-sudo cp deploy/sparrow-agent.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now sparrow-agent
-sudo sparrow-agent doctor -c /etc/sparrow-agent/config.yaml
+验证：
+
+```bash
+curl -fsSL https://你的域名/agent/latest.json | head -5
+```
+
+### 7.2 在节点上安装
+
+面板「节点管理 → 新建节点」拿到一次性注册令牌，然后：
+
+```bash
+curl -fsSL https://你的域名/agent/install.sh | sudo sh -s -- \
+  --url https://你的域名 \
+  --token <一次性令牌> \
+  --manifest https://你的域名/agent/latest.json
+```
+
+脚本会：校验 sha256 → 装二进制到 `/usr/local/bin/sparrow-agent` → 写 `/etc/sparrow-agent/config.yaml`（0600）→ 创建数据目录 → 调用 `register` 拿 `node_id/node_secret` → 装 systemd 单元并启动。
+
+### 7.3 节点上确认
+
+```bash
+sudo sparrow-agent doctor -c /etc/sparrow-agent/config.yaml   # 配置/内核/面板连通
+sudo systemctl status sparrow-agent
+sudo journalctl -u sparrow-agent -f
+```
+
+面板「节点管理」里该节点应变「在线」，`/admin/nodes` 能看到 CPU/内存/在线人数。
+
+> 节点需要先装代理内核（sing-box 或 xray），Agent 只负责拉起与热重载：
+> `curl -fsSL https://sing-box.app/install.sh | sudo sh`
+
+### 7.4 升级 Agent
+
+```bash
+# 面板服务器
+cd /opt/sparrow/app && sudo git pull && cd deploy && sudo ./build-agent.sh && sudo docker compose up -d panel
+
+# 每个节点（幂等，会先停服务再替换）
+curl -fsSL https://你的域名/agent/install.sh | sudo sh -s -- --url https://你的域名 --manifest https://你的域名/agent/latest.json
 ```
 
 ## 8. 排障
