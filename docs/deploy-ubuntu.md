@@ -52,10 +52,10 @@ sudo ./up.sh --domain panel.example.com
 ### 起来了什么
 
 ```
-sparrow-caddy     80/443     容内 caddy：自动签证书、反代 panel
-sparrow-panel     (内部3000)  Next standalone，不映射宿主端口
-sparrow-postgres  (内部5432)  PostgreSQL 17，不映射宿主端口
-sparrow-migrate   一次性      跑完 exited(0)，panel 等它成功才启动
+caddy            80/443     容器内 caddy：自动签证书、反代 panel
+panel            (内部3000)  Next standalone，不映射宿主端口
+postgres         (内部5432)  PostgreSQL 17，不映射宿主端口
+migrate          一次性      跑完 exited(0)，panel 等它成功才启动
 ```
 
 ## 3. 首次初始化
@@ -96,14 +96,14 @@ cd /opt/sparrow/app && git pull && ./deploy/up.sh
 ```bash
 sudo mkdir -p /var/backups/sparrow
 sudo tee /etc/cron.d/sparrow-backup >/dev/null <<'EOF'
-0 3 * * * root docker exec sparrow-postgres pg_dump -U sparrow -Fc sparrow > /var/backups/sparrow/$(date +\%F).dump && find /var/backups/sparrow -name '*.dump' -mtime +14 -delete
+0 3 * * * root cd /opt/sparrow/app/deploy && docker compose exec -T postgres pg_dump -U sparrow -Fc sparrow > /var/backups/sparrow/$(date +\%F).dump && find /var/backups/sparrow -name '*.dump' -mtime +14 -delete
 EOF
 ```
 
 恢复：
 
 ```bash
-docker exec -i sparrow-postgres pg_restore -U sparrow -d sparrow --clean --if-exists < /var/backups/sparrow/2026-11-01.dump
+docker compose exec -T postgres pg_restore -U sparrow -d sparrow --clean --if-exists < /var/backups/sparrow/2026-11-01.dump
 ```
 
 > `deploy/.env` 里的 `MASTER_KEY` 加密了节点密钥/插件密钥，**必须单独备份**（密码管理器），它不在数据库里；丢了节点要重新注册。
@@ -150,7 +150,7 @@ sudo sparrow-agent doctor -c /etc/sparrow-agent/config.yaml
 |---|---|
 | `panel` unhealthy | `docker compose logs panel`；多半是 `DATABASE_URL` 密码与库不一致 |
 | `migrate` exited 1 | `docker compose logs migrate`；改过 `POSTGRES_PASSWORD` 但 volume 还是旧密码 → 改回去或 `down -v` 重来（**删数据**） |
-| `sparrow-caddy` 一直 Restarting | 先看真实报错：`sudo docker compose run --rm --entrypoint caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`；常见是 80/443 被旧 nginx/caddy 占用（`sudo ss -lntp \| grep -E ':(80\|443)'`）或 `.env` 里 `SITE_DOMAIN` 为空 |
+| `caddy` 一直 Restarting | 先看真实报错：`sudo docker compose run --rm --entrypoint caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`；常见是 80/443 被旧 nginx/caddy 占用（`sudo ss -lntp \| grep -E ':(80\|443)'`）或 `.env` 里 `SITE_DOMAIN` 为空 |
 | 证书申请失败 | 域名未解析 / 80 被占 / 云安全组没开；`docker compose logs caddy` |
 | `/setup` 403 | 没填或填错 `SETUP_TOKEN`（值在 `deploy/.env`） |
 | 登录后又跳回登录页 | `NEXT_PUBLIC_SITE_URL` 与实际域名不一致 |
