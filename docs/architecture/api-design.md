@@ -51,7 +51,7 @@
 |---|---|---|
 | `AUTH_*` | 认证与会话 | `AUTH_INVALID_CREDENTIALS` `AUTH_2FA_REQUIRED` `AUTH_TOKEN_EXPIRED` |
 | `PERM_*` | 权限 | `PERM_DENIED` `PERM_SCOPE_MISSING` |
-| `USER_*` | 用户 | `USER_NOT_FOUND` `USER_DISABLED` `USER_EMAIL_TAKEN` |
+| `USER_*` | 用户 | `USER_NOT_FOUND` `USER_DISABLED` `USER_EMAIL_TAKEN` `USER_USERNAME_TAKEN` |
 | `PLAN_*` | 商品 | `PLAN_OUT_OF_STOCK` `PLAN_INACTIVE` |
 | `ORDER_*` | 订单 | `ORDER_NOT_FOUND` `ORDER_ALREADY_PAID` `ORDER_EXPIRED` |
 | `PAY_*` | 支付 | `PAY_SIGN_INVALID` `PAY_GATEWAY_UNAVAILABLE` `PAY_AMOUNT_MISMATCH` |
@@ -82,19 +82,19 @@
 └── ...             特殊路径见 §5
 ```
 
-### 1.1 已实现清单（71 个 handler，与本表逐条核对）
+### 1.1 已实现清单（77 个 handler，与本表逐条核对）
 
 | 域 | 已实现 |
 |---|---|
 | auth | `login` `logout` `me` `register` `email-code` `password/forgot` `password/reset` |
 | setup | `setup`（一次性初始化）、`setup/status` |
-| user | `overview` `plans` `plans/{id}` `orders` `orders/{no}` `orders/{no}/cancel` `orders/{no}/pay` `subscriptions` `subscriptions/{id}` `traffic` |
+| user | `overview` `profile` `password` `sessions`(+`{id}`) `tokens`(+`{id}`) `plans` `plans/{id}` `orders` `orders/{no}` `orders/{no}/cancel` `orders/{no}/pay` `subscriptions` `subscriptions/{id}` `traffic` |
 | admin | `plans`(+`{id}`/`duplicate`) `orders`(+`{id}`/`complete`/`refund`) `subscriptions`(+`{id}`/`batch`) `nodes`(+`{id}`/`sync`) `node-groups` `node-certificates`(+`{id}`) `users`(+`{id}`/`balance`/`sessions`) `coupons`(+`{id}`) `logs/{audit,login,tasks,agent}` `settings` `settings/mail/test` `payment/gateways`(+`{key}`/`test`) `payment/default` `stats/{overview,traffic,revenue,nodes}` `jobs/{name}/run` `plugins`(+`{key}`/`jobs`) `plugin-sources` `plugins/install`（501，流水线未实现） |
 | agent | `register` `heartbeat` `config` `traffic` `commands` `commands/{id}/ack` |
 | public | `plans` `site` `status` |
 | 特殊 | `/sub/{token}`、`/sub/{token}/info` |
 
-> 下文表格里其余条目是**设计目标**（如 2FA、用户 profile、API Token、订阅设备管理），尚未实现。
+> 下文表格里其余条目是**设计目标**（如 2FA、订阅设备管理与重置流量），尚未实现。
 
 ---
 
@@ -148,9 +148,11 @@ METHOD \n PATH \n TIMESTAMP \n NONCE \n SHA256(body)
 | POST | `/api/v1/auth/2fa/verify` | 2FA 校验（登录第二步，**未实现**） |
 | POST | `/api/v1/auth/password/forgot` | 找回密码（发邮件） |
 | POST | `/api/v1/auth/password/reset` | 重置密码 |
-| GET | `/api/v1/user/profile` | 个人信息（**未实现**，个人设置页目前只读） |
-| PATCH | `/api/v1/user/profile` | 修改资料（**未实现**） |
-| POST | `/api/v1/user/password` | 修改密码（**未实现**） |
+| GET | `/api/v1/user/profile` | 个人信息（id / username / email / telegramId / roleCode / twoFactorEnabled / createdAt / lastLoginAt；不含密码与 2FA 密钥） |
+| PATCH | `/api/v1/user/profile` | 修改资料（`username` / `telegramId`，邮箱不可改；用户名大小写不敏感唯一，冲突 409 `USER_USERNAME_TAKEN`） |
+| POST | `/api/v1/user/password` | 修改密码（当前密码错误 422 `AUTH_INVALID_CREDENTIALS`；新旧相同 422 `AUTH_PASSWORD_UNCHANGED`；成功后吊销除当前会话外的全部会话） |
+| GET | `/api/v1/user/sessions` | 登录设备列表（ip / userAgent / current / createdAt / lastSeenAt / expiresAt） |
+| DELETE | `/api/v1/user/sessions/{id}` | 吊销自己的会话（吊销当前会话等同登出并清 cookie；非本人 404 `SESSION_NOT_FOUND`） |
 | GET | `/api/v1/user/overview` | 首页概览（配额、到期、最近订单、公告） |
 | GET | `/api/v1/user/plans` | 可购买商品 |
 | GET | `/api/v1/user/plans/{id}` | 商品详情 |
@@ -165,9 +167,9 @@ METHOD \n PATH \n TIMESTAMP \n NONCE \n SHA256(body)
 | POST | `/api/v1/user/subscriptions/{id}/reset` | 重置流量（计费或权限控制） |
 | POST | `/api/v1/user/subscriptions/{id}/devices` | 踢下线（清设备记录） |
 | GET | `/api/v1/user/traffic` | 流量明细（按时间范围聚合） |
-| GET | `/api/v1/user/tokens` | API Token 列表 |
-| POST | `/api/v1/user/tokens` | 创建 Token |
-| DELETE | `/api/v1/user/tokens/{id}` | 吊销 Token |
+| GET | `/api/v1/user/tokens` | API Token 列表（只回 prefix / scopes / createdAt / lastUsedAt / expiresAt / revokedAt） |
+| POST | `/api/v1/user/tokens` | 创建 Token（`name` / `scopes` / `expiresInDays`；明文只在响应里返回一次，库内只存 sha256 + 前缀） |
+| DELETE | `/api/v1/user/tokens/{id}` | 吊销 Token（幂等；非本人 404 `TOKEN_NOT_FOUND`） |
 | GET | `/api/v1/user/notifications` | 站内信 |
 
 ---
