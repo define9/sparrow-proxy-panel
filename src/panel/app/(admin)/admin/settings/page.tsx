@@ -13,7 +13,17 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { useAdminSettings, useSaveSettings, type SettingsDto } from '@/lib/api/admin'
+import {
+  MailSettingsForm,
+  normalizeMailSettings,
+  serializeMailSettings
+} from '@/components/admin/mail-settings-form'
+import {
+  useAdminSettings,
+  useSaveSettings,
+  type MailSettingsDto,
+  type SettingsDto
+} from '@/lib/api/admin'
 import { allPermissionPoints, roleMatrix } from '@/lib/mock/admin-ops'
 
 type Section = 'site' | 'register' | 'payment' | 'mail'
@@ -50,8 +60,7 @@ function SettingsForm({ initial, save }: { initial: SettingsDto; save: SaveMutat
   const [site, setSite] = useState<SettingsDto['site']>(initial.site)
   const [registration, setRegistration] = useState<SettingsDto['register']>(initial.register)
   const [payment, setPayment] = useState<SettingsDto['payment']>(initial.payment)
-  const [mail, setMail] = useState<SettingsDto['mail']>(initial.mail)
-  const [smtpPassword, setSmtpPassword] = useState('')
+  const [mail, setMail] = useState<MailSettingsDto>(() => normalizeMailSettings(initial.mail))
 
   function persist(label: string, body: Partial<SettingsDto>) {
     save.mutate(body, {
@@ -64,17 +73,7 @@ function SettingsForm({ initial, save }: { initial: SettingsDto; save: SaveMutat
     if (section === 'site') persist(label, { site })
     if (section === 'register') persist(label, { register: registration })
     if (section === 'payment') persist(label, { payment })
-    if (section === 'mail') {
-      persist(label, {
-        mail: {
-          host: mail.host,
-          port: Number(mail.port) || 465,
-          username: mail.username,
-          password: smtpPassword
-        }
-      })
-      setSmtpPassword('')
-    }
+    if (section === 'mail') persist(label, { mail: serializeMailSettings(mail) })
   }
 
   function saveAll() {
@@ -82,14 +81,8 @@ function SettingsForm({ initial, save }: { initial: SettingsDto; save: SaveMutat
       site,
       register: registration,
       payment,
-      mail: {
-        host: mail.host,
-        port: Number(mail.port) || 465,
-        username: mail.username,
-        password: smtpPassword
-      }
+      mail: serializeMailSettings(mail)
     })
-    setSmtpPassword('')
   }
 
   return (
@@ -276,54 +269,13 @@ function SettingsForm({ initial, save }: { initial: SettingsDto; save: SaveMutat
 
         <TabsContent value="email" className="pt-4">
           <div className="max-w-2xl">
-            <FieldGroup>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="smtp-host">SMTP 主机</FieldLabel>
-                  <Input
-                    id="smtp-host"
-                    value={mail.host}
-                    onChange={(event) => setMail({ ...mail, host: event.target.value })}
-                    placeholder="smtp.example.com"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="smtp-port">端口</FieldLabel>
-                  <Input
-                    id="smtp-port"
-                    inputMode="numeric"
-                    value={String(mail.port)}
-                    onChange={(event) => setMail({ ...mail, port: Number(event.target.value) || 0 })}
-                  />
-                </Field>
-              </div>
-              <Field>
-                <FieldLabel htmlFor="smtp-username">用户名</FieldLabel>
-                <Input
-                  id="smtp-username"
-                  value={mail.username}
-                  onChange={(event) => setMail({ ...mail, username: event.target.value })}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="smtp-password">密码</FieldLabel>
-                <Input
-                  id="smtp-password"
-                  type="password"
-                  value={smtpPassword}
-                  onChange={(event) => setSmtpPassword(event.target.value)}
-                  placeholder={mail.hasPassword ? '已设置，留空保持不变' : '••••••••'}
-                  autoComplete="new-password"
-                />
-                <FieldDescription>留空表示保持原密码；接口不回显明文。</FieldDescription>
-              </Field>
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => saveSection('mail', '邮件设置')} disabled={save.isPending}>
-                  <Save data-icon="inline-start" />
-                  保存邮件设置
-                </Button>
-              </div>
-            </FieldGroup>
+            <MailSettingsForm value={mail} onChange={setMail} disabled={save.isPending} />
+            <div className="mt-5">
+              <Button onClick={() => saveSection('mail', '邮件设置')} disabled={save.isPending}>
+                <Save data-icon="inline-start" />
+                保存邮件设置
+              </Button>
+            </div>
           </div>
         </TabsContent>
 
