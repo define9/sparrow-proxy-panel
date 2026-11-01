@@ -413,6 +413,34 @@ export interface MailProvider {
 
 **插件不能直接改订单状态**，只返回结论，由核心执行跃迁。
 
+### 8.1 内置支付插件（已落地）
+
+支付渠道**不是**写死的数组，而是 `type: payment` 的插件：
+
+```
+lib/plugin-host/
+  types.ts                 BuiltinPlugin（key/name/type/version/manifest.configSchema）
+  builtin/payment-epay.ts  易支付：apiUrl / pid / key / channel / notifyUrl / returnUrl
+  builtin/payment-stripe.ts Stripe：publishableKey / secretKey / webhookSecret（仅配置存储）
+  registry.ts              ensureBuiltinPlugins()：幂等 upsert 进 plugins 表
+  schema.ts                configSchema(JSON Schema) → 前端 FieldSpec[]
+  secret.ts                用 MASTER_KEY 派生密钥做 AES-256-GCM（库里是 v1$… 密文）
+lib/payments/index.ts      读 plugins 表 + manifest，拼装接口返回（含脱敏）
+```
+
+关键约定：
+
+| 项 | 行为 |
+|---|---|
+| 插件身份 | `plugins.key`（`payment-epay`），接口额外返回去前缀的 `id`（`epay`）供前端展示 |
+| 启停 | `enabled` ↔ `plugins.status`（`installed` / `disabled`） |
+| 配置 | 存 `plugins.config`（JSON），`x-secret` 字段加密落库，接口回显 `••••` |
+| 新增渠道 | 加一个 `builtin/payment-*.ts` 文件（以后也可以走 git 安装的外部插件） |
+| 前端渲染 | 完全由 `configSchema` 驱动，不写死字段 |
+
+`ensureBuiltinPlugins()` 在 `instrumentation.ts` 启动时执行，且 `listGateways()` 首次调用时兜底；
+只更新 name/version/manifest，**不覆盖** config 与 status，所以升级不会清掉商户配置。
+
 ### 8.2 流程
 
 ```

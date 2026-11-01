@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useLocale } from 'next-intl'
-import { ChevronRight, Radio } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import {
   Collapsible,
   CollapsibleContent,
@@ -25,6 +25,7 @@ import {
   SidebarRail,
   useSidebar
 } from '@/components/ui/sidebar'
+import { SparrowMark } from '@/components/brand/sparrow-mark'
 import { NavUser } from '@/components/layout/nav-user'
 import { usePrefetchRoute } from '@/lib/api/prefetch'
 import type { SessionUser } from '@/lib/auth/types'
@@ -62,9 +63,7 @@ export function AppSidebar({ navKey, permissions, title, user }: AppSidebarProps
           <SidebarMenuItem>
             <SidebarMenuButton asChild size="lg" tooltip={collapsed ? 'Sparrow Panel' : undefined}>
               <Link href="/">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Radio className="size-4" />
-                </div>
+                <SparrowMark className="size-8 shrink-0" />
                 {collapsed ? null : (
                   <div className="grid flex-1 text-left leading-tight">
                     <span className="truncate font-semibold">Sparrow</span>

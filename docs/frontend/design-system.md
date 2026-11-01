@@ -165,7 +165,27 @@ export { Package as PlanIcon, Receipt as OrderIcon, Rss as SubscriptionIcon, Ser
 
 - 纯图标按钮必须有 `aria-label` 或 `sr-only` 文本
 
-## 8. 字体
+## 8. 品牌标识与站点图标
+
+麻雀图形是唯一品牌标识，所有 logo 位都从它派生，不要另找图或另画。
+
+| 文件 | 用途 |
+|---|---|
+| `app/icon.svg` | 标签页 favicon，Next 自动注入 `<link rel="icon" type="image/svg+xml">` |
+| `app/favicon.ico` | 16 / 32 / 48 三档，兜底 `/favicon.ico` 与老浏览器 |
+| `app/apple-icon.png` | iOS 主屏 180×180，直角全出血，圆角交给系统切 |
+| `public/brand/sparrow.svg` | 原始矢量（白底 + 墨色鸟），对外物料用 |
+| `public/brand/sparrow-mark.svg` `.png` | 绿底方形标，邮件 / OG / 第三方后台用 |
+
+站内 logo 统一 `<SparrowMark className="size-7" />`（`components/brand/sparrow-mark.tsx`），
+和 favicon 用的是同一份 path 数据：品牌绿 `#008b45`（= `--primary`）+ 墨色 `#1C0101`。
+
+颜色写死、**不跟随 `--primary` 反色**——logo 要在明暗两套主题下保持同一张脸。
+需要新尺寸时给 `className` 就行，不要复制一份新的 SVG。
+
+改动图形只改根目录 `麻雀.svg` 源文件，再重新导出上面几件产物，不要手改 `sparrow-mark.tsx` 里的 path。
+
+## 9. 字体
 
 ```tsx
 // app/layout.tsx
@@ -175,7 +195,7 @@ const sans = Public_Sans({ subsets: ['latin'], variable: '--font-public-sans', d
 
 `globals.css` 里 `--font-sans: var(--font-public-sans)`，不再写 `@import` 外链字体。
 
-## 9. 可访问性
+## 10. 可访问性
 
 - 焦点、键盘、ARIA 由 Radix 保证，**不要用 `div` 模拟按钮**
 - `Dialog` / `Sheet` 必须有 `DialogTitle`（可 `sr-only`），否则读屏器不播报
@@ -183,7 +203,7 @@ const sans = Public_Sans({ subsets: ['latin'], variable: '--font-public-sans', d
 - 语义 token 已保证明暗两套对比度；新增状态色需自测 WCAG AA
 - 表格行操作用 `DropdownMenu`（自带键盘操作），不要 `<div onClick>`
 
-## 10. ESLint
+## 11. ESLint
 
 ```js
 // eslint.config.mjs（追加）
