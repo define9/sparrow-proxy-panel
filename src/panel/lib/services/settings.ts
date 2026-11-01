@@ -15,18 +15,14 @@ import {
   type StoredMailConfig
 } from '@/lib/notify/config'
 import type { MailConfig } from '@/lib/notify/types'
-import {
-  mergePaymentSettings,
-  normalizePaymentSettings,
-  toLegacyPaymentView,
-  type PaymentPatch
-} from '@/lib/payments/config'
-import type { PaymentSettings } from '@/lib/payments/types'
+import { applyPaymentSettingsPatch, getLegacyPaymentView } from '@/lib/payments'
+import type { LegacyPaymentPatch, LegacyPaymentView } from '@/lib/payments'
 
 /**
  * 系统设置服务层：按 key 读写 settings 表，缺省值兜底。
  * 邮件密钥（Resend apiKey / SMTP 密码）只回显「是否已设置」，不把明文送回浏览器。
- * 支付渠道按 lib/payments 的声明式配置存取，本文件只负责落库与旧开关兼容视图。
+ * 支付渠道已经搬到插件体系（plugins 表），本文件只保留旧设置页的两个开关视图：
+ * 读 = 插件 status，写 = 转交给 lib/payments。
  */
 
 export type SettingsPatch = Partial<z.infer<typeof settingsSchema>>
@@ -42,12 +38,12 @@ const DEFAULTS = {
 type SectionValues = {
   site: { name: string; logo: string; announcement: string; icp: string }
   register: { open: boolean; emailVerify: boolean; giftTrafficGb: number; inviteRequired: boolean }
-  payment: PaymentSettings
+  payment: LegacyPaymentView
   mail: MailConfig
 }
 
 /** 旧设置页仍然按两个开关展示，视图层保持兼容 */
-type PaymentView = { epayEnabled: boolean; stripeEnabled: boolean }
+type PaymentView = LegacyPaymentView
 
 type StoredSections = { [K in SettingsKey]: SectionValues[K] }
 
@@ -74,8 +70,8 @@ async function readSections(): Promise<StoredSections> {
       ...DEFAULTS.register,
       ...(parseJson<Partial<SectionValues['register']>>(stored.get('register')) ?? {})
     },
-    // 旧结构 { epayEnabled, stripeEnabled } 与缺省渠道都在 normalize 里补齐
-    payment: normalizePaymentSettings(parseJson<unknown>(stored.get('payment'))),
+    // 旧结构 { epayEnabled, stripeEnabled } 的视图：现在等于 plugins.status
+    payment: await getLegacyPaymentView(),
     // 旧扁平结构（host/port/username/password）在 normalize 里映射到 smtp
     mail: normalizeMailConfig(parseJson<StoredMailConfig>(stored.get('mail')))
   }
@@ -85,7 +81,7 @@ function toSettingsView(sections: StoredSections): SettingsView {
   return {
     site: sections.site,
     register: sections.register,
-    payment: toLegacyPaymentView(sections.payment),
+    payment: sections.payment,
     mail: toMailSettingsView(sections.mail)
   }
 }
@@ -103,27 +99,6 @@ export async function getMailConfig(): Promise<MailConfig> {
   return normalizeMailConfig(parseJson<StoredMailConfig>(rows[0]?.value))
 }
 
-/**
- * 服务端内部读取支付渠道配置（含明文密钥）。
- * 仅供 lib/payments 做校验、测试与下单判定，返回给 HTTP 前必须脱敏。
- */
-export async function readPaymentSettings(): Promise<PaymentSettings> {
-  const rows = await db.select().from(settings).where(eq(settings.key, 'payment')).limit(1)
-  return normalizePaymentSettings(parseJson<unknown>(rows[0]?.value))
-}
-
-/** 支付渠道配置落库（审计由调用方 lib/payments 负责） */
-export async function writePaymentSettings(value: PaymentSettings): Promise<void> {
-  const serialized = JSON.stringify(value)
-  await db
-    .insert(settings)
-    .values({ key: 'payment', value: serialized, updatedAt: new Date() })
-    .onConflictDoUpdate({
-      target: settings.key,
-      set: { value: serialized, updatedAt: new Date() }
-    })
-}
-
 export async function updateSettings(
   actor: AuditContext,
   patch: SettingsPatch
@@ -132,19 +107,25 @@ export async function updateSettings(
   const next: StoredSections = {
     site: { ...current.site, ...(patch.site ?? {}) },
     register: { ...current.register, ...(patch.register ?? {}) },
-    payment: mergePaymentSettings(current.payment, patch.payment as PaymentPatch | undefined),
+    payment: current.payment,
     // 密钥为空 / 脱敏占位符时保留原值
     mail: mergeMailConfig(current.mail, patch.mail as StoredMailConfig | undefined)
   }
 
   const updatedKeys = KEYS.filter((key) => patch[key] !== undefined)
 
+  // payment 不再写 settings 表：渠道配置归 plugins.config，启用状态归 plugins.status
   for (const key of updatedKeys) {
+    if (key === 'payment') continue
     const value = JSON.stringify(next[key])
     await db
       .insert(settings)
       .values({ key, value, updatedAt: new Date() })
       .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: new Date() } })
+  }
+
+  if (patch.payment !== undefined) {
+    next.payment = await applyPaymentSettingsPatch(patch.payment as LegacyPaymentPatch | undefined)
   }
 
   await writeAudit(actor, {
