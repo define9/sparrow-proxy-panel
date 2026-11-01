@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -28,6 +29,20 @@ export default function LoginPage() {
     defaultValues: { email: '', password: '', remember: true }
   })
   const { errors, isSubmitting } = form.formState
+
+  // 全新部署（没有超管）时直接引导到初始化向导
+  useEffect(() => {
+    let alive = true
+    fetch('/api/v1/setup/status')
+      .then((response) => response.json())
+      .then((status: { initialized: boolean }) => {
+        if (alive && !status.initialized) router.replace('/setup')
+      })
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [router])
 
   async function onSubmit(values: LoginValues) {
     const response = await fetch('/api/v1/auth/login', {

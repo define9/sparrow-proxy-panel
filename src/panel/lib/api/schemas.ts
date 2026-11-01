@@ -117,3 +117,17 @@ export const settingsSchema = z.object({
     })
     .partial()
 })
+
+export const setupSchema = z
+  .object({
+    siteName: z.string().trim().min(1, '请填写站点名称').max(64),
+    email: z.string().email('请输入合法邮箱'),
+    username: z.string().trim().min(2, '用户名至少 2 位').max(32),
+    password: z.string().min(8, '密码至少 8 位').max(72),
+    confirmPassword: z.string().min(8, '请再次输入密码'),
+    token: z.string().optional()
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: '两次输入的密码不一致',
+    path: ['confirmPassword']
+  })

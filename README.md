@@ -26,11 +26,13 @@ docker compose -f deploy/compose.yaml up -d
 # 2. 环境变量
 cd src/panel && cp .env.example .env
 
-# 3. 建表 + 种子数据
+# 3. 建表（首次部署只需迁移，不需要 seed）
 pnpm db:migrate
-pnpm db:seed
 
-# 4. 起开发服务
+# 4. 打开 http://localhost:3000/setup 创建第一个超级管理员
+#    （本地演示想直接有数据可跑 `pnpm db:seed`，种子账号见下表）
+
+# 5. 起开发服务
 cd ../.. && pnpm dev        # http://localhost:3000
 ```
 
