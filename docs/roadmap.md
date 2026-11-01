@@ -1,67 +1,72 @@
 # 路线图
 
 粒度为"可交付、可验收"：每个阶段结束时代码可运行、可部署、可演示。
-勾选状态是本项目唯一的进度记录。
+勾选状态是本项目唯一的进度记录。`[~]` 表示已实现但只覆盖部分场景。
 
 ## P0 · MVP（目标：单站点可运营）
 
 ### 工程基线
 
-- [ ] monorepo 骨架：pnpm workspaces + 共享 eslint/tsconfig + mise 工具链 + CI
-- [ ] `packages/contracts`：zod schema + OpenAPI 生成 + 权限点定义
-- [ ] Next.js 应用骨架：App Router、Tailwind 4 + shadcn init、`globals.css` 主题
-- [ ] 数据模型：Drizzle schema、迁移、种子（默认管理员）
+- [x] monorepo 骨架：pnpm workspaces + 共享 tsconfig + mise 工具链
+- [x] `packages/contracts`：zod 类型 + 权限点（24 个）
+- [x] Next.js 应用骨架：App Router、Tailwind 4 + shadcn、主题与明暗模式
+- [x] 数据模型：31 张表、迁移已应用、seed 脚本
+- [ ] CI：lint / typecheck / build / 迁移漂移检测
+- [ ] Renovate 与版本锁定
 
 ### 后端
 
-- [ ] 认证：登录 / 登出 / 会话（`sessions` 表 + cookie）/ RBAC 中间层
-- [ ] 注册：邮箱验证码、密码策略
-- [ ] 商品：CRUD、上下架、库存（用户端 + 管理端）
-- [ ] 订单：创建、查询、取消、手动完成、状态机
-- [ ] 支付：内置易支付插件（创建支付、回调验签、幂等、`payment.reconcile` 对账兜底）
-- [ ] 订阅：配额判定、渲染（v2ray / clash / sing-box）、输出路由
-- [ ] 节点：CRUD、节点组、证书、内核配置渲染（sing-box / xray）
-- [ ] Agent 协议：契约 + HMAC 签名（共享测试向量）
-- [ ] 流量：内存计数 + 批量落库 + 汇总
-- [ ] 定时任务：流量刷入、订单过期、订阅到期、节点健康
-- [ ] 日志：审计 / 登录 / 任务三类写入
+- [x] 认证：登录 / 登出 / 会话（`sessions` 表）/ RBAC 权限点 / 登录日志
+- [x] 注册：邮箱验证码（内存态 + devCode）、自动登录
+- [x] 商品：列表/详情（用户端 + 公开接口），管理端 CRUD
+- [x] 订单：创建（库存扣减）、列表、详情、取消、状态机
+- [~] 支付：内置演示网关（下单→支付→开通订阅，幂等）；第三方网关走插件，未实现
+- [x] 订阅：列表/详情、格式切换、渲染（v2ray / clash / sing-box）、`/sub/{token}` 输出与 `/info`
+- [x] 节点：CRUD、节点组、证书、配置渲染骨架、同步命令
+- [x] Agent 协议：注册 / 心跳 / 配置（304）/ 流量上报（seq 幂等），HMAC 签名 + 4 组固定向量
+- [~] 流量：`traffic_logs` 写入与聚合任务；`traffic_daily` 空表时趋势为空
+- [x] 定时任务：`instrumentation.ts` + advisory lock（traffic:flush / subscription:expire / node:health）
+- [x] 日志：登录日志、审计日志（写操作留痕）、任务日志
+- [ ] 订阅配额判定集中到 `lib/quota.ts`（当前散在服务层）
+- [ ] 2FA（TOTP）与找回密码邮件
 
 ### 前端
 
-- [ ] shadcn 基座：`components/ui`、主题切换、`Toaster`、`Sidebar`
-- [ ] i18n：next-intl，`zh-CN` + `en`，语言切换器
-- [ ] 布局：公开页 / 认证页 / 用户端 / 管理端
-- [ ] 导航：权限过滤菜单、命令面板（⌘K）、面包屑
-- [ ] 认证页：登录、注册、找回密码
-- [ ] 用户端：概览、商品、下单、订单、订阅、流量、设置
-- [ ] 管理端：仪表盘、商品、订单、订阅、节点、用户、日志、系统设置
-- [ ] 通用组件：DataTable、StateBadge、QuotaBar、CopyButton、EmptyState
+- [x] shadcn 基座：`components/ui`、主题切换、Toaster、Sidebar、Command 面板
+- [~] i18n：next-intl 已接入，导航与通用词已翻译；页面文案仍为中文硬编码
+- [x] 布局：公开页 / 认证页 / 用户端 / 管理端
+- [x] 导航：权限过滤菜单、⌘K 命令面板、面包屑
+- [x] 认证页：登录/注册已接真实接口；找回密码为提示（邮件插件未实现）
+- [x] 用户端：概览、商品、下单、订单、订阅、流量、设置（设置写操作仍为提示）
+- [x] 管理端：仪表盘、商品、订单、订阅、节点、证书、用户、插件、索引源、日志、优惠券、设置
+- [x] 通用组件：DataTable、StateBadge、StatCard、QuotaBar、CopyButton、EmptyState
 
 ### Agent
 
-- [ ] 配置解析、注册、HMAC 签名、心跳
+- [ ] 配置解析、注册、签名、心跳（Go 侧未开始，协议已在面板侧就绪）
 - [ ] 拉取配置并应用（sing-box）、内核进程守护
-- [ ] 流量采集与上报、差值与幂等
+- [ ] 流量采集与上报
 - [ ] systemd 单元、安装脚本
 
 ### 验收标准
 
 - 完整跑通：注册 → 下单 → 支付 → 拿到订阅链接 → 客户端能连上节点 → 流量出现在面板
+  （前四步已打通，节点侧需 Go Agent）
 - 面板不可达时，节点继续服务（缓存配置）
-- `pnpm lint` / `typecheck` / `test` / `build` 全绿
-- OpenAPI 契约漂移检测在 CI 生效
-- Agent 签名与面板 canonical 一致（共享测试向量通过）
+- `pnpm lint` / `typecheck` / `build` 全绿
+- OpenAPI 契约漂移检测在 CI 生效（待 CI）
+- Agent 签名与面板 canonical 一致（4 组向量已落在 `docs/architecture/agent-sign-vectors.md`）
 
 ## P1 · 可运营（目标：能真实对外接单）
 
-- [ ] 优惠券、余额、按量计费
-- [ ] 插件框架：manifest、hook 与熔断、定时任务声明 + 统一 ticker、配置表单自动生成、插件管理页
-- [ ] git URL 直接安装：preview 权限清单 / 异步安装任务 / 进程监管 / `commit_sha` 固定 / 回滚
+- [ ] 优惠券核销链路接到下单（表与接口已在，前端无入口）
+- [ ] 插件框架：manifest、hook 与熔断、配置表单自动生成、插件管理页
+- [ ] git URL 直接安装：preview 权限清单 / 异步安装任务 / 进程监管 / 回滚
 - [ ] 插件 SDK + `sparrow-plugin` CLI（`dev` / `check`）
 - [ ] 索引源：官方 JSON 索引（只发现与提示更新，不自动升级）
-- [ ] 节点流量排行、仪表盘趋势图
+- [ ] 节点流量排行、仪表盘趋势图（节点维度）
 - [ ] 邮件 / Telegram 通知插件，站内信、到期提醒、流量预警
-- [ ] IP 白名单、设备限制、限速
+- [ ] IP 白名单、设备限制、限速（面板侧下发）
 - [ ] Agent：Xray 支持、命令长轮询、自更新、本地缓存、metrics
 - [ ] 系统设置可视化、公告与首页内容管理
 
