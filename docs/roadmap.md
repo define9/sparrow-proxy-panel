@@ -4,7 +4,8 @@
 
 ## 当前能力（一句话版）
 
-可以部署、可以注册登录、可以买套餐（演示支付）、可以给订阅链接、可以接节点并看到流量；
+可以部署、可以注册登录、可以买套餐（演示支付）、可以给订阅链接、可以接节点并看到流量，
+个人设置里的资料 / 改密 / 登录设备 / API Token 均已真实落库，用户端只读 GET 已支持 PAT（`Authorization: Bearer spx_…`，按 scope 授权）；
 **还不能接真实支付渠道**，**外部插件安装尚未实现**，Agent 未做真机内核联调。
 
 ---
@@ -16,7 +17,7 @@
 - [x] monorepo：pnpm workspaces + `packages/contracts` + Go module
 - [x] Next.js 骨架：App Router、Tailwind 4 + shadcn、明暗模式
 - [x] 数据模型：31 张表、迁移已应用、seed 脚本（可重复执行）
-- [x] 后端分层：route → service → db，`pnpm check:layers` 门禁（71 个 handler 全绿）
+- [x] 后端分层：route → service → db，`pnpm check:layers` 门禁（77 个 handler 全绿）
 - [x] 部署物：Dockerfile（standalone）+ compose（内置 caddy / 外部 caddy 两种）+ 一键脚本
 - [ ] CI：lint / typecheck / build / `check:layers` / 迁移漂移
 - [ ] Renovate 依赖更新
@@ -28,7 +29,7 @@
 - [x] 找回密码：`forgot` → `reset`（改密后吊销该用户全部会话）
 - [x] 站点初始化向导 `/setup`（建超管、并发安全、公网需 SETUP_TOKEN）
 - [ ] 2FA（TOTP）UI 与恢复码
-- [ ] 个人资料/密码修改真正落库（当前设置页部分为提示）
+- [x] 个人资料/密码修改真正落库（`/user/profile` `/user/password` `/user/sessions` `/user/tokens`；2FA、通知偏好仍未做）
 
 ### 商品 / 订单 / 支付
 
@@ -112,7 +113,7 @@
 - [ ] 节点分组倍率、订阅分组
 - [ ] Telegram Bot（用户侧自助）
 - [ ] 繁体中文、多语言补全
-- [ ] 用户 API Token 开放能力（对外 SDK）
+- [~] 用户 API Token 开放能力（对外 SDK；签发/吊销已落库，PAT 只读鉴权已通，SDK 未做）
 - [ ] OpenTelemetry / Prometheus 指标与告警
 
 ## P3 · 规模化

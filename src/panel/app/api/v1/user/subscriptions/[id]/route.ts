@@ -1,10 +1,10 @@
 import { ok, route } from '@/lib/api/response'
 import { subscriptionUpdateSchema } from '@/lib/api/schemas'
-import { requireApiSession } from '@/lib/auth/guard'
+import { requireApiSession, requireUserApi } from '@/lib/auth/guard'
 import { getUserSubscription, updateUserSubscription } from '@/lib/services/billing'
 
-export const GET = route<{ params: Promise<{ id: string }> }>(async (_req, ctx) => {
-  const session = await requireApiSession()
+export const GET = route<{ params: Promise<{ id: string }> }>(async (req, ctx) => {
+  const session = await requireUserApi(req, 'subscription:read')
   const { id } = await ctx.params
   return ok(await getUserSubscription(session.user.id, session.user.email, id))
 })

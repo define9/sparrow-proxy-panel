@@ -49,9 +49,10 @@
 
 | 段 | 含义 | 示例 |
 |---|---|---|
-| `AUTH_*` | 认证与会话 | `AUTH_INVALID_CREDENTIALS` `AUTH_2FA_REQUIRED` `AUTH_TOKEN_EXPIRED` |
+| `AUTH_*` | 认证与会话 | `AUTH_INVALID_CREDENTIALS` `AUTH_2FA_REQUIRED` `AUTH_TOKEN_EXPIRED` `AUTH_REQUIRED` |
 | `PERM_*` | 权限 | `PERM_DENIED` `PERM_SCOPE_MISSING` |
-| `USER_*` | 用户 | `USER_NOT_FOUND` `USER_DISABLED` `USER_EMAIL_TAKEN` |
+| `TOKEN_*` | 编程凭据（PAT） | `TOKEN_SCOPE_DENIED` `TOKEN_NOT_FOUND` |
+| `USER_*` | 用户 | `USER_NOT_FOUND` `USER_DISABLED` `USER_EMAIL_TAKEN` `USER_USERNAME_TAKEN` |
 | `PLAN_*` | 商品 | `PLAN_OUT_OF_STOCK` `PLAN_INACTIVE` |
 | `ORDER_*` | 订单 | `ORDER_NOT_FOUND` `ORDER_ALREADY_PAID` `ORDER_EXPIRED` |
 | `PAY_*` | 支付 | `PAY_SIGN_INVALID` `PAY_GATEWAY_UNAVAILABLE` `PAY_AMOUNT_MISMATCH` |
@@ -82,19 +83,19 @@
 └── ...             特殊路径见 §5
 ```
 
-### 1.1 已实现清单（71 个 handler，与本表逐条核对）
+### 1.1 已实现清单（77 个 handler，与本表逐条核对）
 
 | 域 | 已实现 |
 |---|---|
 | auth | `login` `logout` `me` `register` `email-code` `password/forgot` `password/reset` |
 | setup | `setup`（一次性初始化）、`setup/status` |
-| user | `overview` `plans` `plans/{id}` `orders` `orders/{no}` `orders/{no}/cancel` `orders/{no}/pay` `subscriptions` `subscriptions/{id}` `traffic` |
+| user | `overview` `profile` `password` `sessions`(+`{id}`) `tokens`(+`{id}`) `plans` `plans/{id}` `orders` `orders/{no}` `orders/{no}/cancel` `orders/{no}/pay` `subscriptions` `subscriptions/{id}` `traffic` |
 | admin | `plans`(+`{id}`/`duplicate`) `orders`(+`{id}`/`complete`/`refund`) `subscriptions`(+`{id}`/`batch`) `nodes`(+`{id}`/`sync`) `node-groups` `node-certificates`(+`{id}`) `users`(+`{id}`/`balance`/`sessions`) `coupons`(+`{id}`) `logs/{audit,login,tasks,agent}` `settings` `settings/mail/test` `payment/gateways`(+`{key}`/`test`) `payment/default` `stats/{overview,traffic,revenue,nodes}` `jobs/{name}/run` `plugins`(+`{key}`/`jobs`) `plugin-sources` `plugins/install`（501，流水线未实现） |
 | agent | `register` `heartbeat` `config` `traffic` `commands` `commands/{id}/ack` |
 | public | `plans` `site` `status` |
 | 特殊 | `/sub/{token}`、`/sub/{token}/info` |
 
-> 下文表格里其余条目是**设计目标**（如 2FA、用户 profile、API Token、订阅设备管理），尚未实现。
+> 下文表格里其余条目是**设计目标**（如 2FA、订阅设备管理与重置流量），尚未实现。
 
 ---
 
@@ -107,6 +108,46 @@
 - 浏览器：自建会话，cookie 里放 32 字节随机 id（HttpOnly + Secure + SameSite=Lax），`sessions` 表只存 `SHA-256(id)`
 - 编程访问：`Authorization: Bearer spx_xxx`（personal_access_token，带 scope）
 - 管理端接口：会话 + 权限点校验（`requirePermission('admin:node:write')`）
+
+#### PAT（API Token）鉴权细则
+
+**只读凭据**：PAT 只能调用用户端 `/api/v1/user` 的 GET 读接口，不能下单、不能改资料/密码、不能管理会话与 Token 本身。
+
+请求方式只有一种：
+
+```
+Authorization: Bearer spx_<48 hex>
+```
+
+- scheme 大小写不敏感；**不接受** query 参数、cookie、表单里的 token（会经访问日志 / Referer 泄漏）
+- 服务端只存 `sha256(token)` 与可读前缀，鉴权时比对摘要
+- 校验维度：token 存在、`revoked_at` 为空、未过期、用户 `status = active`；任一不满足统一 **401 `AUTH_REQUIRED`**（不区分「不存在」和「已吊销」，避免枚举）
+- `last_used_at` 节流写入：仅当为空或距上次使用超过 60 秒才更新，避免每个请求一次写库
+- 有 cookie 会话时以会话为准，浏览器访问不受 scope 限制；只有没有会话时才看 Bearer 头
+
+scope ↔ 接口对应关系：
+
+| scope | 可调用的只读接口 |
+|---|---|
+| `profile:read` | `GET /user/profile`、`GET /user/overview`、`GET /user/plans`、`GET /user/plans/{id}` |
+| `subscription:read` | `GET /user/subscriptions`、`GET /user/subscriptions/{id}` |
+| `traffic:read` | `GET /user/traffic` |
+| `orders:read` | `GET /user/orders`、`GET /user/orders/{orderNo}` |
+
+scope 不足返回 **403 `TOKEN_SCOPE_DENIED`**，`data.scope` 给出缺少的 scope。
+
+**明确不接受 PAT 的端点**（继续只认 cookie 会话，代码里走 `requireApiSession()` / `requirePermission()`）：
+
+| 范围 | 原因 |
+|---|---|
+| `/api/v1/auth/**` | 登录/登出/注册/验证码/找回密码，编程凭据不参与 |
+| `/api/v1/user/password` | 不能改密 |
+| `/api/v1/user/sessions`、`/api/v1/user/sessions/{id}` | 不能查看/踢登录设备 |
+| `/api/v1/user/tokens`、`/api/v1/user/tokens/{id}` | 只读凭据不能自我提权或管理其它凭据 |
+| 用户端所有 POST / PATCH / DELETE（含下单、取消、支付、改订阅） | PAT 是只读凭据 |
+| `/api/v1/admin/**` | 管理端走 RBAC 权限点，PAT 不参与 |
+
+实现：`lib/auth/token.ts`（`resolveAccessToken`）+ `lib/auth/guard.ts`（`requireUserApi(req, scope)`）。
 
 ### 2.2 节点（Agent）
 
@@ -148,26 +189,28 @@ METHOD \n PATH \n TIMESTAMP \n NONCE \n SHA256(body)
 | POST | `/api/v1/auth/2fa/verify` | 2FA 校验（登录第二步，**未实现**） |
 | POST | `/api/v1/auth/password/forgot` | 找回密码（发邮件） |
 | POST | `/api/v1/auth/password/reset` | 重置密码 |
-| GET | `/api/v1/user/profile` | 个人信息（**未实现**，个人设置页目前只读） |
-| PATCH | `/api/v1/user/profile` | 修改资料（**未实现**） |
-| POST | `/api/v1/user/password` | 修改密码（**未实现**） |
-| GET | `/api/v1/user/overview` | 首页概览（配额、到期、最近订单、公告） |
-| GET | `/api/v1/user/plans` | 可购买商品 |
-| GET | `/api/v1/user/plans/{id}` | 商品详情 |
+| GET | `/api/v1/user/profile` | 个人信息（id / username / email / telegramId / roleCode / twoFactorEnabled / createdAt / lastLoginAt；不含密码与 2FA 密钥）；**支持 PAT（`profile:read`）** |
+| PATCH | `/api/v1/user/profile` | 修改资料（`username` / `telegramId`，邮箱不可改；用户名大小写不敏感唯一，冲突 409 `USER_USERNAME_TAKEN`） |
+| POST | `/api/v1/user/password` | 修改密码（当前密码错误 422 `AUTH_INVALID_CREDENTIALS`；新旧相同 422 `AUTH_PASSWORD_UNCHANGED`；成功后吊销除当前会话外的全部会话） |
+| GET | `/api/v1/user/sessions` | 登录设备列表（ip / userAgent / current / createdAt / lastSeenAt / expiresAt） |
+| DELETE | `/api/v1/user/sessions/{id}` | 吊销自己的会话（吊销当前会话等同登出并清 cookie；非本人 404 `SESSION_NOT_FOUND`） |
+| GET | `/api/v1/user/overview` | 首页概览（配额、到期、最近订单、公告）；**支持 PAT（`profile:read`）** |
+| GET | `/api/v1/user/plans` | 可购买商品；**支持 PAT（`profile:read`）** |
+| GET | `/api/v1/user/plans/{id}` | 商品详情；**支持 PAT（`profile:read`）** |
 | POST | `/api/v1/user/orders` | 下单（返回支付信息） |
-| GET | `/api/v1/user/orders` | 订单列表 |
-| GET | `/api/v1/user/orders/{orderNo}` | 订单详情 |
+| GET | `/api/v1/user/orders` | 订单列表；**支持 PAT（`orders:read`）** |
+| GET | `/api/v1/user/orders/{orderNo}` | 订单详情；**支持 PAT（`orders:read`）** |
 | POST | `/api/v1/user/orders/{orderNo}/cancel` | 取消订单 |
 | POST | `/api/v1/user/orders/{orderNo}/pay` | 触发支付（返回网关跳转 URL） |
-| GET | `/api/v1/user/subscriptions` | 订阅列表 |
-| GET | `/api/v1/user/subscriptions/{id}` | 订阅详情（含各格式订阅链接） |
+| GET | `/api/v1/user/subscriptions` | 订阅列表；**支持 PAT（`subscription:read`）** |
+| GET | `/api/v1/user/subscriptions/{id}` | 订阅详情（含各格式订阅链接）；**支持 PAT（`subscription:read`）** |
 | PATCH | `/api/v1/user/subscriptions/{id}` | 修改设备数/限速/格式 |
 | POST | `/api/v1/user/subscriptions/{id}/reset` | 重置流量（计费或权限控制） |
 | POST | `/api/v1/user/subscriptions/{id}/devices` | 踢下线（清设备记录） |
-| GET | `/api/v1/user/traffic` | 流量明细（按时间范围聚合） |
-| GET | `/api/v1/user/tokens` | API Token 列表 |
-| POST | `/api/v1/user/tokens` | 创建 Token |
-| DELETE | `/api/v1/user/tokens/{id}` | 吊销 Token |
+| GET | `/api/v1/user/traffic` | 流量明细（按时间范围聚合）；**支持 PAT（`traffic:read`）** |
+| GET | `/api/v1/user/tokens` | API Token 列表（只回 prefix / scopes / createdAt / lastUsedAt / expiresAt / revokedAt）；**不接受 PAT** |
+| POST | `/api/v1/user/tokens` | 创建 Token（`name` / `scopes` / `expiresInDays`；明文只在响应里返回一次，库内只存 sha256 + 前缀） |
+| DELETE | `/api/v1/user/tokens/{id}` | 吊销 Token（幂等；非本人 404 `TOKEN_NOT_FOUND`） |
 | GET | `/api/v1/user/notifications` | 站内信 |
 
 ---

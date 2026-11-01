@@ -15,7 +15,20 @@ export const registerSchema = z.object({
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(8, '请输入当前密码'),
-  newPassword: z.string().min(8, '新密码至少 8 位')
+  newPassword: z.string().min(8, '新密码至少 8 位').max(72)
+})
+
+/** 用户自助改资料：邮箱是登录凭证，不在可改范围内 */
+export const profileUpdateSchema = z.object({
+  username: z.string().trim().min(2, '用户名至少 2 位').max(32, '用户名最多 32 位').optional(),
+  telegramId: z.string().trim().max(64, 'Telegram 最多 64 位').nullable().optional()
+})
+
+/** 创建 API Token：scopes 的白名单校验在 service 里做（与分享常量对齐） */
+export const apiTokenCreateSchema = z.object({
+  name: z.string().trim().min(1, '请填写 Token 名称').max(64, '名称最多 64 位'),
+  scopes: z.array(z.string().trim().min(1).max(64)).max(10).default([]),
+  expiresInDays: z.coerce.number().int().min(1).max(365).nullable().optional()
 })
 
 export const forgotPasswordSchema = z.object({

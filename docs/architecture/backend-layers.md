@@ -63,6 +63,7 @@ src/panel/
 │   │   ├── settings.ts
 │   │   ├── stats.ts
 │   │   ├── subscription.ts       # 订阅渲染与输出
+│   │   ├── profile.ts            # 个人资料 / 改密 / 登录设备 / API Token
 │   │   └── site.ts
 │   ├── plugin-host/              # 内置插件注册表（manifest/configSchema）
 │   ├── payments/                 # 支付渠道：读 plugins 表 + 字段声明
@@ -175,8 +176,8 @@ CI 里与 lint / typecheck 一起跑（见 roadmap P0「CI」）。
 
 | 项 | 现状 |
 |---|---|
-| 有服务层 | ✅ `lib/services/` 15 个域（auth / agent / admin-users / settings / nodes / coupons / logs / plugins / billing / admin-commerce / stats / subscription / site / setup / mail） |
-| route 直连 db | ✅ 0 个（`check:layers` 通过，71 个 handler 平均 20 行以内，最大 54 行） |
+| 有服务层 | ✅ `lib/services/` 16 个域（auth / agent / admin-users / settings / nodes / coupons / logs / plugins / billing / admin-commerce / stats / subscription / profile / site / setup / mail） |
+| route 直连 db | ✅ 0 个（`check:layers` 通过，77 个 handler 平均 19.9 行，最大 55 行） |
 | schema 目录 | ⚠️ 分散在 `lib/api/{schemas,commerce-schemas,node-schemas}.ts`，待合并到 `lib/schemas/` |
 | 展示常量 | ⚠️ `lib/billing.ts`、`lib/admin-labels.ts` 在 lib 根，待归入 `lib/labels/` |
 | 测试 | ⚠️ 只有 `lib/agent/sign.test.ts`；service 单测待补 |

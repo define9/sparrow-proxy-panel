@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { ZodError } from 'zod'
 
+/**
+ * 错误码约定（机器可读）：AUTH_* 认证、PERM_* 权限、TOKEN_* 编程凭据（PAT）、
+ * USER_* / PLAN_* / ORDER_* … 按资源分段，完整表见 docs/architecture/api-design.md。
+ */
+export const TOKEN_SCOPE_DENIED = 'TOKEN_SCOPE_DENIED'
+
 export class ApiError extends Error {
   constructor(
     public statusCode: number,
@@ -79,6 +85,15 @@ export function route<Ctx>(handler: (req: Request, ctx: Ctx) => Promise<Response
     } catch (error) {
       return toErrorResponse(error)
     }
+  }
+}
+
+/** 读取 JSON body：非法 JSON 按 400 处理，避免 SyntaxError 落到 500 */
+export async function readJson(req: Request): Promise<unknown> {
+  try {
+    return await req.json()
+  } catch {
+    throw new ApiError(400, 'INVALID_JSON', '请求体不是合法的 JSON')
   }
 }
 

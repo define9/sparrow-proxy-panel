@@ -1,10 +1,10 @@
 import { created, list, route } from '@/lib/api/response'
 import { orderInputSchema, orderListQuerySchema } from '@/lib/api/schemas'
-import { requireApiSession } from '@/lib/auth/guard'
+import { requireApiSession, requireUserApi } from '@/lib/auth/guard'
 import { createOrder, listUserOrders } from '@/lib/services/billing'
 
 export const GET = route(async (req) => {
-  const session = await requireApiSession()
+  const session = await requireUserApi(req, 'orders:read')
   const query = orderListQuerySchema.parse(
     Object.fromEntries(new URL(req.url).searchParams.entries())
   )

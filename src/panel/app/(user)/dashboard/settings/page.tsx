@@ -11,14 +11,13 @@ import {
 } from '@/components/user/settings-forms'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { account } from '@/lib/mock/user-data'
 
 export default function SettingsPage() {
   return (
     <>
       <PageHeader
         title="个人设置"
-        description={`${account.username} · ${account.email}。所有修改均为演示，不会写入后端。`}
+        description="账号资料、登录密码、登录设备与 API Token。"
       />
 
       <Tabs defaultValue="profile" className="gap-4">
@@ -49,7 +48,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>个人资料</CardTitle>
-              <CardDescription>昵称与邮箱会展示在工单与通知邮件中</CardDescription>
+              <CardDescription>用户名与邮箱会展示在通知与工单中；邮箱是登录凭证，不可修改。</CardDescription>
             </CardHeader>
             <CardContent>
               <ProfileForm />
@@ -61,7 +60,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>账号安全</CardTitle>
-              <CardDescription>修改密码、开启两步验证、查看登录设备</CardDescription>
+              <CardDescription>修改密码、查看登录设备；两步验证暂未开放。</CardDescription>
             </CardHeader>
             <CardContent>
               <SecurityForm />
@@ -73,7 +72,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>通知偏好</CardTitle>
-              <CardDescription>选择需要通过邮件接收的消息类型</CardDescription>
+              <CardDescription>通知偏好暂未接入，当前仅作展示。</CardDescription>
             </CardHeader>
             <CardContent>
               <NotificationForm />
