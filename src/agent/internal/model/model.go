@@ -17,10 +17,10 @@ type RegisterRequest struct {
 }
 
 type RegisterResponse struct {
-	NodeID              string `json:"nodeId"`
-	NodeSecret          string `json:"nodeSecret"`
-	HeartbeatInterval   int    `json:"heartbeatInterval"`
-	ConfigPollInterval  int    `json:"configPollInterval"`
+	NodeID             string `json:"nodeId"`
+	NodeSecret         string `json:"nodeSecret"`
+	HeartbeatInterval  int    `json:"heartbeatInterval"`
+	ConfigPollInterval int    `json:"configPollInterval"`
 }
 
 /* ---------------- 心跳 ---------------- */
@@ -62,10 +62,10 @@ type Certificate struct {
 }
 
 type ConfigResponse struct {
-	Version      int             `json:"version"`
-	Core         string          `json:"core"`
-	Config       json.RawMessage `json:"config"`
-	Rules        struct {
+	Version int             `json:"version"`
+	Core    string          `json:"core"`
+	Config  json.RawMessage `json:"config"`
+	Rules   struct {
 		Users []ConfigUser `json:"users"`
 	} `json:"rules"`
 	Certificates []Certificate `json:"certificates"`
@@ -94,10 +94,10 @@ type TrafficResult struct {
 /* ---------------- 命令 ---------------- */
 
 type Command struct {
-	ID        string          `json:"id"`
-	Command   string          `json:"command"`
-	Payload   json.RawMessage `json:"payload,omitempty"`
-	IssuedAt  string          `json:"issuedAt,omitempty"`
+	ID       string          `json:"id"`
+	Command  string          `json:"command"`
+	Payload  json.RawMessage `json:"payload,omitempty"`
+	IssuedAt string          `json:"issuedAt,omitempty"`
 }
 
 type CommandsResponse struct {

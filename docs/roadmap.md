@@ -43,10 +43,11 @@
 
 ### Agent
 
-- [ ] 配置解析、注册、签名、心跳（Go 侧未开始，协议已在面板侧就绪）
-- [ ] 拉取配置并应用（sing-box）、内核进程守护
-- [ ] 流量采集与上报
-- [ ] systemd 单元、安装脚本
+- [x] 配置解析、注册、签名、心跳、状态持久化（`state.json`：seq / configVersion / backlog）
+- [x] 拉取配置并应用（sing-box / xray）、内核进程守护、命令长轮询
+- [~] 流量采集：sing-box（Clash API `/connections`，按 email→uid 归因）、xray（`api statsquery`）；未与真内核联调
+- [x] 自更新（sha256 + ed25519 + 原子替换 + 回滚）与 systemd / install.sh 交付
+- [ ] 真机验证（真实 sing-box 承载流量 → 面板流量曲线）与灰度升级
 
 ### 验收标准
 

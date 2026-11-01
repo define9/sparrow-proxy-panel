@@ -1,8 +1,15 @@
 import 'server-only'
 import type { z } from 'zod'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { agentEvents, nodeHeartbeats, nodes, subscriptions, trafficLogs } from '@/lib/db/schema'
+import {
+  agentCommands,
+  agentEvents,
+  nodeHeartbeats,
+  nodes,
+  subscriptions,
+  trafficLogs
+} from '@/lib/db/schema'
 import { ApiError } from '@/lib/api/response'
 import type { agentHeartbeatSchema, agentRegisterSchema, agentTrafficSchema } from '@/lib/api/node-schemas'
 import { MIN_AGENT_VERSION, resolveUids } from '@/lib/agent/config'
@@ -177,4 +184,96 @@ export async function ingestTraffic(
   rememberSeq(nodeId, input.seq)
 
   return { accepted: logs.length, seq: input.seq }
+}
+
+/* ---------------- 命令下发 ---------------- */
+
+export interface AgentCommandDto {
+  id: string
+  command: string
+  payload: unknown
+  issuedAt: string
+}
+
+export interface AgentCommandAckInput {
+  status: 'success' | 'failed'
+  result?: unknown
+}
+
+/**
+ * 拉取待执行命令（长轮询）。
+ *
+ * 单机部署下用 DB 轮询实现：pending → 立即返回；没有则按 wait 秒数轮询几次。
+ * claimed 状态表示已经投递给 Agent，避免同一命令被重复下发。
+ */
+export async function listPendingCommands(
+  nodeId: string,
+  waitSeconds: number,
+  sleep: (ms: number) => Promise<void> = defaultSleep
+): Promise<AgentCommandDto[]> {
+  const deadline = Date.now() + Math.max(0, Math.min(waitSeconds, 25)) * 1000
+
+  for (;;) {
+    const rows = await db
+      .select()
+      .from(agentCommands)
+      .where(and(eq(agentCommands.nodeId, nodeId), eq(agentCommands.status, 'pending')))
+      .orderBy(agentCommands.issuedAt)
+      .limit(20)
+
+    if (rows.length > 0) {
+      await db
+        .update(agentCommands)
+        .set({ status: 'acked', ackedAt: new Date() })
+        .where(inArray(agentCommands.id, rows.map((row) => row.id)))
+
+      return rows.map((row) => ({
+        id: row.id,
+        command: row.command,
+        payload: row.payload ? safeParse(row.payload) : null,
+        issuedAt: row.issuedAt.toISOString()
+      }))
+    }
+
+    if (Date.now() >= deadline) return []
+    await sleep(1000)
+  }
+}
+
+/** 命令回执：done 或 failed，结果原样落库便于排查 */
+export async function ackCommand(
+  nodeId: string,
+  commandId: string,
+  input: AgentCommandAckInput
+): Promise<{ ok: true }> {
+  const [row] = await db
+    .select()
+    .from(agentCommands)
+    .where(and(eq(agentCommands.id, commandId), eq(agentCommands.nodeId, nodeId)))
+    .limit(1)
+
+  if (!row) throw new ApiError(404, 'AGENT_COMMAND_NOT_FOUND', '命令不存在')
+
+  await db
+    .update(agentCommands)
+    .set({
+      status: input.status === 'success' ? 'done' : 'failed',
+      finishedAt: new Date(),
+      result: input.result === undefined ? null : JSON.stringify(input.result)
+    })
+    .where(eq(agentCommands.id, commandId))
+
+  return { ok: true }
+}
+
+function defaultSleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
+}
+
+function safeParse(raw: string) {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return raw
+  }
 }

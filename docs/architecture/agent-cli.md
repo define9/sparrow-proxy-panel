@@ -1,5 +1,32 @@
 # Agent CLI 设计
 
+## 0. 实现状态（2026-11）
+
+已落地于 `src/agent/`（Go 1.24，单静态二进制，无第三方依赖，仅 yaml.v3）：
+
+| 能力 | 状态 | 位置 |
+|---|---|---|
+| 配置解析 / 默认值 / 环境变量覆盖 / 凭据回写 | ✅ | `internal/config` |
+| HMAC 签名（4 组固定向量） | ✅ | `internal/sign` |
+| 签名 HTTP 客户端（含时钟偏差自愈、User-Agent、304） | ✅ | `internal/client` |
+| 注册 / 心跳 / 配置轮询 / 流量上报 / 命令长轮询 | ✅ | `internal/agent` |
+| 状态持久化（seq / configVersion / backlog，原子写） | ✅ | `internal/agent/state.go` |
+| 累计值 → 增量、失败 backlog 合并重发 | ✅ | `internal/traffic` |
+| 内核抽象与进程管理（sing-box / xray） | ✅ | `internal/core` |
+| sing-box 统计（Clash API `/connections`） | ✅ 未真机联调 | `internal/core/singbox.go` |
+| xray 统计（`xray api statsquery`） | ✅ 未真机联调 | `internal/core/xray.go` |
+| 离线缓存（最后一份配置 + 证书） | ✅ 包级实现 | `internal/cache` |
+| 自更新（sha256 + ed25519 + 回滚） | ✅ | `internal/update` |
+| systemd 单元 / 安装脚本 / 发布脚本 | ✅ 交付未真机验证 | `deploy/`、`scripts/` |
+| 面板侧命令下发 `/api/v1/agent/commands` | ✅ | `src/panel/app/api/v1/agent/commands/` |
+
+约定与面板保持一致的两处**易错点**：
+
+1. 首次拉配置必须发 `X-Config-Version: -1`（面板 `configVersion` 从 0 开始，发 0 会命中 304，配置永远不下发）
+2. `Apply` 前要注入统计所需的本机参数（sing-box 的 `experimental.clash_api`、xray 的 `api/stats/policy`），否则拿不到 per-user 流量
+
+尚未完成：真机内核联调、灰度升级、面板侧 `/api/v1/public/agent/release` 与 `/download`（当前自更新走 `custom-url` / `github` 源）。
+
 ## 1. 定位
 
 `sparrow-agent` 是部署在代理节点上的**单二进制程序**，职责边界：

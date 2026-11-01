@@ -13,13 +13,13 @@ func TestSignVectors(t *testing.T) {
 	tsTime := time.UnixMilli(ts)
 
 	cases := []struct {
-		name      string
-		method    string
-		path      string
-		nonce     string
-		body      string
-		wantHash  string
-		wantSig   string
+		name     string
+		method   string
+		path     string
+		nonce    string
+		body     string
+		wantHash string
+		wantSig  string
 	}{
 		{
 			name:     "GET 空 body",
