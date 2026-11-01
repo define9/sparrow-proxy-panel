@@ -65,7 +65,26 @@ export interface SettingsDto {
   site: { name: string; logo: string; announcement: string; icp: string }
   register: { open: boolean; emailVerify: boolean; giftTrafficGb: number; inviteRequired: boolean }
   payment: { epayEnabled: boolean; stripeEnabled: boolean }
-  mail: { host: string; port: number; username: string; password: string; hasPassword?: boolean }
+  mail: {
+    /** 新版结构（设置页 UI 改造前可能不存在） */
+    provider?: 'resend' | 'log'
+    resend?: { apiKey: string; from: string; hasApiKey: boolean }
+    smtp?: {
+      host: string
+      port: number
+      username: string
+      password: string
+      from: string
+      hasPassword: boolean
+    }
+    testTo?: string
+    /** 旧设置页兼容字段（等价于 smtp.*） */
+    host: string
+    port: number
+    username: string
+    password: string
+    hasPassword?: boolean
+  }
 }
 
 export interface PluginJobDto {

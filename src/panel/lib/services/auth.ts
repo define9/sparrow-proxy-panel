@@ -5,7 +5,13 @@ import { roles, sessions, users } from '@/lib/db/schema'
 import { ApiError } from '@/lib/api/response'
 import { hashPassword, verifyPassword } from '@/lib/auth/password'
 import { createSession, destroySession, recordLogin } from '@/lib/auth/session'
-import { verifyCode } from '@/lib/auth/verification'
+import { issueCode, issueResetCode, verifyCode, verifyResetCode } from '@/lib/auth/verification'
+import { resolveMailProvider, sendMail } from '@/lib/notify'
+import {
+  buildLoginCodeMessage,
+  buildResetCodeMessage,
+  exposesDevCode
+} from '@/lib/services/mail'
 
 /**
  * 认证域服务层：登录 / 注册 / 退出。
@@ -172,4 +178,97 @@ export async function logout(sessionId?: string) {
     await db.delete(sessions).where(eq(sessions.id, sessionId))
   }
   await destroySession()
+}
+
+// ── 邮箱验证码 / 找回密码 ───────────────────────────────────
+
+export interface EmailCodeResult {
+  sent: true
+  expiresIn: number
+  /** 仅 log provider 或未配置时返回，方便本地联调 */
+  devCode?: string
+}
+
+/**
+ * 发送登录/注册验证码。
+ * 配置了真实 provider（Resend）→ 真发信且不回传 devCode；
+ * log provider 或未配置 → 走日志并回传 devCode。
+ */
+export async function sendLoginCode(emailInput: string): Promise<EmailCodeResult> {
+  const email = emailInput.toLowerCase()
+  const code = issueCode(email)
+  const provider = await resolveMailProvider()
+
+  if (provider) {
+    await sendMail(buildLoginCodeMessage(email, code), provider)
+  }
+
+  return exposesDevCode(provider)
+    ? { sent: true, expiresIn: 600, devCode: code }
+    : { sent: true, expiresIn: 600 }
+}
+
+/**
+ * 申请重置密码验证码。
+ * 无论邮箱是否存在都返回同样的成功响应（防枚举）；只有账号存在时才真正投递。
+ */
+export async function requestPasswordReset(emailInput: string): Promise<EmailCodeResult> {
+  const email = emailInput.toLowerCase()
+  const code = issueResetCode(email)
+
+  const [user] = await db
+    .select({ id: users.id, status: users.status })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${email}`)
+    .limit(1)
+
+  const provider = await resolveMailProvider()
+  if (provider && user && user.status !== 'disabled') {
+    try {
+      await sendMail(buildResetCodeMessage(email, code), provider)
+    } catch (error) {
+      // 不把投递失败暴露给调用方，避免通过错误差异枚举账号
+      console.error('[auth] password reset mail failed', error)
+    }
+  }
+
+  return exposesDevCode(provider)
+    ? { sent: true, expiresIn: 600, devCode: code }
+    : { sent: true, expiresIn: 600 }
+}
+
+export interface ResetPasswordInput {
+  email: string
+  code: string
+  password: string
+}
+
+/** 校验重置码 → 改密码 → 吊销该用户全部会话 */
+export async function resetPassword(input: ResetPasswordInput) {
+  const email = input.email.toLowerCase()
+
+  const [user] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${email}`)
+    .limit(1)
+
+  if (!user || !verifyResetCode(email, input.code)) {
+    throw new ApiError(422, 'AUTH_CODE_INVALID', '验证码错误或已过期', { field: 'code' })
+  }
+
+  const passwordHash = await hashPassword(input.password)
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, user.id))
+    // 密码已变更，旧会话全部失效（含可能被盗用的会话）
+    await tx.delete(sessions).where(eq(sessions.userId, user.id))
+  })
+
+  await recordLogin({ userId: user.id, email, success: true, reason: 'password_reset' })
+
+  return { ok: true as const }
 }

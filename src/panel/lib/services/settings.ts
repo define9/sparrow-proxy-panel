@@ -1,16 +1,24 @@
 import 'server-only'
 import type { z } from 'zod'
-import { inArray } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { settings } from '@/lib/db/schema'
 import type { AuditContext } from '@/lib/api/audit'
 import { writeAudit } from '@/lib/api/audit'
 import { parseJson } from '@/lib/api/admin-ops'
 import type { settingsSchema } from '@/lib/api/schemas'
+import {
+  mergeMailConfig,
+  normalizeMailConfig,
+  toMailSettingsView,
+  type MailSettingsView,
+  type StoredMailConfig
+} from '@/lib/notify/config'
+import type { MailConfig } from '@/lib/notify/types'
 
 /**
  * 系统设置服务层：按 key 读写 settings 表，缺省值兜底。
- * 邮件密码只回显「是否已设置」，不把明文送回浏览器。
+ * 邮件密钥（Resend apiKey / SMTP 密码）只回显「是否已设置」，不把明文送回浏览器。
  */
 
 export type SettingsPatch = Partial<z.infer<typeof settingsSchema>>
@@ -21,24 +29,23 @@ type SettingsKey = (typeof KEYS)[number]
 const DEFAULTS = {
   site: { name: 'Sparrow Panel', logo: '', announcement: '', icp: '' },
   register: { open: true, emailVerify: false, giftTrafficGb: 0, inviteRequired: false },
-  payment: { epayEnabled: true, stripeEnabled: false },
-  mail: { host: '', port: 465, username: '', password: '' }
+  payment: { epayEnabled: true, stripeEnabled: false }
+} as const
+
+type SectionValues = {
+  site: { name: string; logo: string; announcement: string; icp: string }
+  register: { open: boolean; emailVerify: boolean; giftTrafficGb: number; inviteRequired: boolean }
+  payment: { epayEnabled: boolean; stripeEnabled: boolean }
+  mail: MailConfig
 }
 
-type SectionValues = typeof DEFAULTS
 type StoredSections = { [K in SettingsKey]: SectionValues[K] }
 
 export interface SettingsView {
   site: SectionValues['site']
   register: SectionValues['register']
   payment: SectionValues['payment']
-  mail: {
-    host: string
-    port: number
-    username: string
-    password: string
-    hasPassword: boolean
-  }
+  mail: MailSettingsView
 }
 
 async function readSections(): Promise<StoredSections> {
@@ -61,10 +68,8 @@ async function readSections(): Promise<StoredSections> {
       ...DEFAULTS.payment,
       ...(parseJson<Partial<SectionValues['payment']>>(stored.get('payment')) ?? {})
     },
-    mail: {
-      ...DEFAULTS.mail,
-      ...(parseJson<Partial<SectionValues['mail']>>(stored.get('mail')) ?? {})
-    }
+    // 旧扁平结构（host/port/username/password）在 normalize 里映射到 smtp
+    mail: normalizeMailConfig(parseJson<StoredMailConfig>(stored.get('mail')))
   }
 }
 
@@ -73,18 +78,21 @@ function toSettingsView(sections: StoredSections): SettingsView {
     site: sections.site,
     register: sections.register,
     payment: sections.payment,
-    mail: {
-      host: sections.mail.host,
-      port: sections.mail.port,
-      username: sections.mail.username,
-      password: '',
-      hasPassword: Boolean(sections.mail.password)
-    }
+    mail: toMailSettingsView(sections.mail)
   }
 }
 
 export async function getSettings(): Promise<SettingsView> {
   return toSettingsView(await readSections())
+}
+
+/**
+ * 服务端内部读取邮件原始配置（含明文密钥）。
+ * 仅供 lib/notify 解析 provider 使用，绝不能直接返回给 HTTP 响应。
+ */
+export async function getMailConfig(): Promise<MailConfig> {
+  const rows = await db.select().from(settings).where(eq(settings.key, 'mail')).limit(1)
+  return normalizeMailConfig(parseJson<StoredMailConfig>(rows[0]?.value))
 }
 
 export async function updateSettings(
@@ -96,12 +104,8 @@ export async function updateSettings(
     site: { ...current.site, ...(patch.site ?? {}) },
     register: { ...current.register, ...(patch.register ?? {}) },
     payment: { ...current.payment, ...(patch.payment ?? {}) },
-    mail: { ...current.mail, ...(patch.mail ?? {}) }
-  }
-
-  // 空密码表示保持原值（前端不回显明文，避免误清空）
-  if (!patch.mail?.password) {
-    next.mail.password = current.mail.password
+    // 密钥为空 / 脱敏占位符时保留原值
+    mail: mergeMailConfig(current.mail, patch.mail as StoredMailConfig | undefined)
   }
 
   const updatedKeys = KEYS.filter((key) => patch[key] !== undefined)
