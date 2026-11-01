@@ -1,0 +1,78 @@
+# ============================================================
+# Sparrow Panel —— 使用机器上已有的统一 Caddy/Nginx
+#
+# 只启动三样：postgres（数据库）、migrate（一次性建表）、panel（应用）
+# 不包含反代，HTTPS 交给宿主上已有的 Caddy/Nginx。
+#
+# 用法：
+#   cp compose.caddy-external.yaml compose.yaml   # 或 -f 指定
+#   sudo docker compose up -d --build
+#
+# 反代目标：127.0.0.1:3000（可用 .env 的 PANEL_PORT 改）
+# ============================================================
+
+name: sparrow
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sparrow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 设置 POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-sparrow}
+      TZ: ${TZ:-Asia/Shanghai}
+    command: ["postgres", "-c", "timezone=${TZ:-Asia/Shanghai}"]
+    volumes:
+      - sparrow-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sparrow} -d ${POSTGRES_DB:-sparrow}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # 一次性建表：跑完即退出（exit 0）。幂等，可重复执行。
+  migrate:
+    build:
+      context: ..
+      dockerfile: src/panel/Dockerfile
+      target: migrator
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sparrow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sparrow}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  panel:
+    build:
+      context: ..
+      dockerfile: src/panel/Dockerfile
+      target: runner
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sparrow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sparrow}
+      MASTER_KEY: ${MASTER_KEY:?请在 .env 设置 MASTER_KEY（openssl rand -hex 32）}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?请在 .env 设置 NEXT_PUBLIC_SITE_URL}
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
+    volumes:
+      # 由 deploy/build-agent.sh 产出；没有该目录时挂载为空，不影响启动
+      - ./agent-dist:/app/src/panel/public/agent:ro
+    ports:
+      # 只监听回环，交给宿主上的 Caddy 反代
+      - "127.0.0.1:${PANEL_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/v1/public/status >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  sparrow-pgdata:
