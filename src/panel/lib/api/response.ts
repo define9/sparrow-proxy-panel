@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { ZodError } from 'zod'
 
+/**
+ * 错误码约定（机器可读）：AUTH_* 认证、PERM_* 权限、TOKEN_* 编程凭据（PAT）、
+ * USER_* / PLAN_* / ORDER_* … 按资源分段，完整表见 docs/architecture/api-design.md。
+ */
+export const TOKEN_SCOPE_DENIED = 'TOKEN_SCOPE_DENIED'
+
 export class ApiError extends Error {
   constructor(
     public statusCode: number,
