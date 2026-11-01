@@ -1,71 +1,94 @@
 # 部署手册
 
-一台空白 Ubuntu 22.04/24.04，只需要装 **Docker**。数据库、应用、反向代理（Caddy）全部跑在 compose 里，`80/443` 由 Caddy 容器占用。
+两个脚本，各管一件事：
+
+| 脚本 | 在哪跑 | 干什么 |
+|---|---|---|
+| `deploy/bootstrap.sh` | 服务器（远端推送执行） | **只装环境**：Docker + compose 插件 + git；swap / ufw 可选 |
+| `deploy/up.sh` | 服务器（仓库目录内） | **只起服务**：生成 `.env` → `docker compose up -d --build` |
+
+Node、PostgreSQL、Caddy 全部在容器里，宿主机不用装。
 
 ---
 
-## 1. 一条命令
+## 1. 装环境（远端执行，不用先克隆）
+
+私有仓库，把本机脚本推过去执行：
 
 ```bash
-sudo apt update && sudo apt install -y git
-git clone git@github.com:define9/sparrow-proxy-panel.git
-sudo ./sparrow-proxy-panel/deploy/install.sh --domain panel.example.com
+# 在本机仓库目录
+ssh root@<服务器> 'bash -s -- --swap' < deploy/bootstrap.sh
 ```
 
-> 私有仓库：先在服务器配好 GitHub SSH key（`ssh-keygen -t ed25519` → 公钥加到 GitHub → `ssh -T git@github.com` 验证）。
-> 没有域名就先跑 `--domain :80`（纯 HTTP），之后再改。
+`--swap` 是**可选**的：只在内存 < 2 GB、担心构建 OOM 时才加。
+其它可选参数：`--firewall`（启用 ufw 并只放行 22/80/443）、`--no-docker`（已装 Docker 时跳过）。
 
-脚本会依次做：
+公开仓库可以直接 curl：
 
-1. 检查并安装 Docker（官方源）与 compose 插件 —— 已装则跳过
-2. 克隆/更新代码到 `/opt/sparrow/app`
-3. 生成 `deploy/.env`：随机 `POSTGRES_PASSWORD`、`MASTER_KEY`、`SETUP_TOKEN`
-4. `docker compose up -d --build`，等面板 healthy
-5. 打印站点地址、`/setup` 链接和初始化令牌
-
-已完成状态：
-
-```
-NAME              STATUS
-sparrow-caddy     Up (healthy)
-sparrow-panel     Up (healthy)
-sparrow-postgres  Up (healthy)
+```bash
+curl -fsSL https://raw.githubusercontent.com/define9/sparrow-proxy-panel/main/deploy/bootstrap.sh \
+  | sudo bash -s -- --swap
 ```
 
-`migrate` 是一次性容器，跑完就退出（`exited (0)`），属正常。
+装完会打印下一步命令。
 
-## 2. 首次初始化
+## 2. 起服务（本地 compose）
 
-打开 `https://你的域名/setup`：
+```bash
+git clone git@github.com:define9/sparrow-proxy-panel.git /opt/sparrow/app
+cd /opt/sparrow/app/deploy
+sudo ./up.sh --domain panel.example.com
+```
 
-1. 填站点名、管理员邮箱、用户名、密码
-2. 填脚本最后打印的 `SETUP_TOKEN`（在 `deploy/.env` 里）
+`up.sh` 做的事：
+
+1. 没有 `.env` 就生成：随机 `POSTGRES_PASSWORD`、`MASTER_KEY`、`SETUP_TOKEN`
+2. 域名 → 自动写 `SITE_DOMAIN` 与 `NEXT_PUBLIC_SITE_URL`
+3. `docker compose up -d --build`
+4. 等 `panel` healthy，打印站点地址与初始化令牌
+
+无域名/内网：`./up.sh`（默认 `:80` 纯 HTTP）。其它参数：`--email`、`--no-build`、`--down`。
+
+### 起来了什么
+
+```
+sparrow-caddy     80/443     容内 caddy：自动签证书、反代 panel
+sparrow-panel     (内部3000)  Next standalone，不映射宿主端口
+sparrow-postgres  (内部5432)  PostgreSQL 17，不映射宿主端口
+sparrow-migrate   一次性      跑完 exited(0)，panel 等它成功才启动
+```
+
+## 3. 首次初始化
+
+打开 `https://<域名>/setup`：
+
+1. 站点名、管理员邮箱、用户名、密码
+2. 初始化令牌 = `deploy/.env` 里的 `SETUP_TOKEN`
 3. 提交 → 自动登录进 `/admin`
 
-再访问 `/setup` 只会显示"站点已初始化"。
+再访问 `/setup` 只显示"站点已初始化"。
 
-## 3. 验证
+## 4. 验证
 
 ```bash
-cd /opt/sparrow/app/deploy && docker compose ps
-curl -s https://你的域名/api/v1/public/status
-docker compose logs -f panel        # 观察是否有报错
+cd /opt/sparrow/app/deploy
+docker compose ps                                  # 三个 Up + 一个 exited(0)
+curl -s https://<域名>/api/v1/public/status         # 200
+sudo ss -lntp | grep -E ':(80|443|3000|5432)'      # 应只看到 80/443
 ```
 
-- [ ] 首页、`/login`、`/admin` 正常
-- [ ] 系统设置里的站点地址与真实域名一致（订阅链接用它拼）
-- [ ] 只有 80/443 对公网开放：`sudo ss -lntp | grep -E ':(80|443|3000|5432)'`
-
-## 4. 日常运维
+## 5. 日常运维
 
 ```bash
 cd /opt/sparrow/app/deploy
 
-docker compose logs -f panel            # 日志
-docker compose restart panel            # 重启
-docker compose up -d --build            # 升级（先跑迁移再切流量）
+docker compose logs -f panel      # 日志
+docker compose restart panel      # 重启
+./up.sh --down                    # 停止（数据在 volume）
+./up.sh --no-build                # 改了 .env 后生效
 
-cd /opt/sparrow/app && git pull && cd deploy && docker compose up -d --build   # 拉新代码升级
+# 升级
+cd /opt/sparrow/app && git pull && ./deploy/up.sh
 ```
 
 备份（每天 3 点，保留 14 天）：
@@ -83,55 +106,34 @@ EOF
 docker exec -i sparrow-postgres pg_restore -U sparrow -d sparrow --clean --if-exists < /var/backups/sparrow/2026-11-01.dump
 ```
 
-> `deploy/.env` 里的 `MASTER_KEY` 加密了节点密钥与插件密钥，**必须单独备份**（密码管理器 / 另一台机器），它不在数据库里。
+> `deploy/.env` 里的 `MASTER_KEY` 加密了节点密钥/插件密钥，**必须单独备份**（密码管理器），它不在数据库里；丢了节点要重新注册。
 
-## 5. 可选配置
+## 6. 换掉内置 Caddy
 
-### 5.1 内存小于 2 GB：加 swap（可选）
-
-构建阶段可能 OOM，脚本会提示。加 swap 再跑：
+已有 Nginx/Traefik，或者要挂到已有反代后面：
 
 ```bash
-sudo ./sparrow-proxy-panel/deploy/install.sh --domain panel.example.com --swap
+# 1) deploy/compose.yaml 里删掉 caddy 服务
+# 2) 给 panel 加端口映射：  - "127.0.0.1:3000:3000"
+# 3) 外部反代到 127.0.0.1:3000
 ```
 
-手工加：
+`deploy/Caddyfile` 只是默认模板，删掉不影响面板。
 
-```bash
-sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
-sudo mkswap /swapfile && sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-```
+## 7. 节点服务器
 
-### 5.2 不用内置 Caddy
-
-已经有 Nginx/Traefik 或走内网时：
-
-```bash
-# 在 deploy/.env 里把 caddy 暴露端口去掉，或改 compose 只保留 panel 的 127.0.0.1:3000
-# 然后外部反代到 127.0.0.1:3000
-```
-
-`deploy/Caddyfile` 只是默认模板，删掉 `caddy` 服务不影响面板本身。
-
-### 5.3 换端口 / 改站点地址
-
-改 `deploy/.env` 的 `NEXT_PUBLIC_SITE_URL` 和 `SITE_DOMAIN`，然后 `docker compose up -d`。
-
-## 6. 节点服务器要装什么
-
-节点是**另一台机器**，只需要内核 + Agent 二进制，不需要 Docker/Node/数据库：
+节点是另一台机器，只要内核 + Agent 二进制（不需要 Docker/Node/DB）：
 
 ```bash
 # 内核（以 sing-box 为例）
 curl -fsSL https://sing-box.app/install.sh | sudo sh
 
-# Agent：本机交叉编译后 scp，或节点上装 Go 自己 build
+# Agent
 cd /tmp && git clone git@github.com:define9/sparrow-proxy-panel.git
 cd sparrow-proxy-panel/src/agent && make build
 sudo install -m 755 bin/sparrow-agent /usr/local/bin/
 
-# 注册（令牌在面板「节点管理 → 新建节点」里拿）
+# 注册（令牌在面板「节点管理 → 新建节点」）
 sudo mkdir -p /etc/sparrow-agent /var/lib/sparrow-agent
 sudo cp deploy/config.example.yaml /etc/sparrow-agent/config.yaml
 sudo sed -i 's#https://panel.example.com#https://你的域名#' /etc/sparrow-agent/config.yaml
@@ -139,20 +141,18 @@ sudo sparrow-agent register -c /etc/sparrow-agent/config.yaml --url https://你�
 
 sudo cp deploy/sparrow-agent.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now sparrow-agent
-
-# 自检
 sudo sparrow-agent doctor -c /etc/sparrow-agent/config.yaml
 ```
 
-## 7. 排障
+## 8. 排障
 
 | 现象 | 处理 |
 |---|---|
-| `panel` 一直 unhealthy | `docker compose logs panel`；多半是 `DATABASE_URL` 密码与库不一致 |
-| `migrate` exited 1 | `docker compose logs migrate`；改过 `POSTGRES_PASSWORD` 但 volume 里还是旧密码 → 改回去，或 `down -v` 重来（**会删数据**） |
-| 证书申请失败 | 域名未解析、80 被占、云安全组没开；`docker compose logs caddy` |
-| `/setup` 403 | 未带 `SETUP_TOKEN` 或填错；值在 `deploy/.env` |
-| 登录后跳回登录页 | `NEXT_PUBLIC_SITE_URL` 与真实域名不一致，或 `SITE_DOMAIN` 写错 |
-| 构建时进程被杀 | 内存不足，加 swap（§5.1） |
-| 重启服务器后没起来 | `sudo systemctl enable docker`；compose 不随开机自启，配 `restart: unless-stopped` 已在服务里，容器会随 docker 启动 |
+| `panel` unhealthy | `docker compose logs panel`；多半是 `DATABASE_URL` 密码与库不一致 |
+| `migrate` exited 1 | `docker compose logs migrate`；改过 `POSTGRES_PASSWORD` 但 volume 还是旧密码 → 改回去或 `down -v` 重来（**删数据**） |
+| 证书申请失败 | 域名未解析 / 80 被占 / 云安全组没开；`docker compose logs caddy` |
+| `/setup` 403 | 没填或填错 `SETUP_TOKEN`（值在 `deploy/.env`） |
+| 登录后又跳回登录页 | `NEXT_PUBLIC_SITE_URL` 与实际域名不一致 |
+| 构建时进程被杀 | 内存不足：`bash bootstrap.sh --swap` 后重跑 `./up.sh` |
+| 重启机器后没起来 | `sudo systemctl enable docker`（compose 服务已设 `restart: unless-stopped`） |
 | 节点一直离线 | 节点上 `sparrow-agent doctor`；面板看节点是否已注册 |

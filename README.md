@@ -16,14 +16,18 @@ docs/               # 产品 / 架构 / 前端文档
 
 ## 生产部署
 
-空白 Ubuntu 只需装 Docker，其余（数据库、应用、HTTPS 反代）都在 compose 里：
+两个脚本各管一件事（宿主机只需 Docker，数据库/应用/HTTPS 都在 compose 里）：
 
 ```bash
-git clone git@github.com:define9/sparrow-proxy-panel.git
-sudo ./sparrow-proxy-panel/deploy/install.sh --domain panel.example.com
+# 1. 远端装环境（本机仓库目录执行；--swap 可选）
+ssh root@<服务器> 'bash -s -- --swap' < deploy/bootstrap.sh
+
+# 2. 服务器上起服务
+git clone git@github.com:define9/sparrow-proxy-panel.git /opt/sparrow/app
+cd /opt/sparrow/app/deploy && sudo ./up.sh --domain panel.example.com
 ```
 
-详见 [docs/deploy-ubuntu.md](docs/deploy-ubuntu.md)。
+然后打开 `https://<域名>/setup` 初始化。详见 [docs/deploy-ubuntu.md](docs/deploy-ubuntu.md)。
 
 ## 本地启动
 
