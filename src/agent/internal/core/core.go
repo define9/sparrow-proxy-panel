@@ -5,6 +5,7 @@ package core
 
 import (
 	"context"
+	"log/slog"
 
 	"sparrow/agent/internal/model"
 )
@@ -34,6 +35,26 @@ type Options struct {
 	ConfigPath string
 	// WorkDir 用于存放备份配置与运行时文件。
 	WorkDir string
+	// Logger 可选；为 nil 时用 slog.Default()。统计精度告警等写到这里。
+	Logger *slog.Logger
+}
+
+// UserDirectory 是内核的可选能力：接收面板 rules.users 的 email → uid 映射。
+//
+// 主循环拿到配置后应先调用 BindUsers(kernel, resp.Rules.Users) 再 Apply；
+// 内核配置里自带 uid 时（面板当前就是这么下发的）即使不调用也能正确归因。
+type UserDirectory interface {
+	SetUsers(users []model.ConfigUser)
+}
+
+// BindUsers 把面板下发的用户表绑定到内核；内核不支持时返回 false。
+func BindUsers(c Core, users []model.ConfigUser) bool {
+	directory, supported := c.(UserDirectory)
+	if !supported {
+		return false
+	}
+	directory.SetUsers(users)
+	return true
 }
 
 // New 按类型构造内核管理器。
