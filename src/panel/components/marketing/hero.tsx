@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { Activity, ArrowRight, Gauge, Server, Users, Zap } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -13,8 +14,18 @@ export function Hero() {
   const onlineNodes = nodes.filter((node) => node.status === 'online').length
 
   return (
-    <section className="border-b bg-muted/30">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-16 lg:py-24">
+    <section className="relative overflow-hidden border-b bg-muted/30">
+      {/* 品牌剪影水印（public/brand/sparrow-logo.svg，宽幅、透明背景） */}
+      <Image
+        src="/brand/sparrow-logo.svg"
+        alt=""
+        aria-hidden
+        width={1666}
+        height={1024}
+        priority
+        className="pointer-events-none absolute top-1/2 -right-16 hidden w-[46rem] max-w-[58%] -translate-y-1/2 opacity-[0.05] select-none lg:block dark:opacity-[0.08] dark:invert"
+      />
+      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-16 lg:py-24">
         <div className="flex max-w-3xl flex-col gap-6">
           <Badge variant="outline" className="w-fit gap-1.5 bg-background">
             <Zap className="size-3 text-primary" />

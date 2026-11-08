@@ -10,3 +10,6 @@ dist/
 .DS_Store
 next-env.d.ts
 *.tsbuildinfo
+
+# 本地构建覆盖（字体域名等环境相关，不提交）
+deploy/compose.override.yaml
