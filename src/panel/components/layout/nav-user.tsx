@@ -18,7 +18,6 @@ import {
   Settings,
   Sun
 } from 'lucide-react'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +31,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar'
+import { UserAvatar } from '@/components/user-avatar'
 import { localeNames, locales, type Locale } from '@/i18n/config'
 import type { SessionUser } from '@/lib/auth/types'
 
@@ -40,7 +40,6 @@ function writeLocaleCookie(next: string) {
 }
 
 export function NavUser({ user }: { user: SessionUser }) {
-  const initials = user.username.slice(0, 2).toUpperCase()
   const isAdmin = user.role !== 'user'
   const [loggingOut, setLoggingOut] = useState(false)
 
@@ -81,9 +80,7 @@ export function NavUser({ user }: { user: SessionUser }) {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="size-8 rounded-lg">
-                <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
-              </Avatar>
+              <UserAvatar user={user} className="size-8" rounded="lg" />
               {collapsed ? null : (
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.username}</span>
@@ -101,9 +98,7 @@ export function NavUser({ user }: { user: SessionUser }) {
           >
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <Avatar className="size-8 rounded-lg">
-                  <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
-                </Avatar>
+                <UserAvatar user={user} className="size-8" rounded="lg" />
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.username}</span>
                   <span className="truncate text-xs text-muted-foreground">{user.email}</span>
