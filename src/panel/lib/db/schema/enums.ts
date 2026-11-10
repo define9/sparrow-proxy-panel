@@ -34,7 +34,9 @@ export const pluginTypeEnum = pgEnum('plugin_type', [
   'subscription',
   'notify',
   'hook',
-  'ui'
+  'ui',
+  // 主题：完整的独立静态站点（不是 CSS 变量），文件在 ${THEME_DIR}/{key}/dist
+  'theme'
 ])
 export const pluginStatusEnum = pgEnum('plugin_status', [
   'installed',

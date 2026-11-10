@@ -11,5 +11,8 @@ dist/
 next-env.d.ts
 *.tsbuildinfo
 
+# 主题/插件落盘目录（运行时数据：data/themes、data/tmp，不进仓库）
+/src/panel/data/
+
 # 本地构建覆盖（字体域名等环境相关，不提交）
 deploy/compose.override.yaml

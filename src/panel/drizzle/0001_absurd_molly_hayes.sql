@@ -1,0 +1,1 @@
+ALTER TYPE "public"."plugin_type" ADD VALUE 'theme';
