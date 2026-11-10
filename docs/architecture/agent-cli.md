@@ -52,7 +52,8 @@ curl .../agent/install.sh | sudo sh -s -- --url <面板> --token <令牌>
 1. 首次拉配置必须发 `X-Config-Version: -1`（面板 `configVersion` 从 0 开始，发 0 会命中 304，配置永远不下发）
 2. `Apply` 前要注入统计所需的本机参数（sing-box 的 `experimental.clash_api`、xray 的 `api/stats/policy`），否则拿不到 per-user 流量
 
-尚未完成：真机内核联调、灰度升级、面板侧 `/api/v1/public/agent/release` 与 `/download`（当前自更新走 `custom-url` / `github` 源）。
+尚未完成：真机内核联调、灰度升级、`/download` 面板中转下载（已决定不做：二进制走 GitHub Release，
+面板只提供 `/api/v1/public/agent/release` 元信息与 `/agent/install.sh`）。
 
 ## 1. 定位
 
@@ -227,6 +228,33 @@ Agent 把内核的 per-user 计数（按 email 标签）映射为面板的 `uid`
 - systemd 下由 `sparrow-agent update` 自行下载，替换后 `systemctl restart sparrow-agent`（通过 `EXIT` 约定或调用 systemctl）
 - 支持灰度：面板可指定节点分批升级（先 10% 观察 30 分钟）
 
+### 9.1 发布元信息（面板只指路，不托管二进制）
+
+二进制在 GitHub Release，面板镜像里**不放**二进制（7MB 只在安装/升级时用一次）。
+面板对外提供 `GET /api/v1/public/agent/release`（公开，无需登录）：
+
+```jsonc
+{
+  "version": "0.1.0",
+  "channel": "stable",
+  "source": "github",            // github（默认）/ custom-url（自建 CDN）/ none（未配置）
+  "repo": "define9/sparrow-proxy-panel",
+  "tag": "agent/v0.1.0",
+  "assets": { "linux-amd64": { "url": "https://github.com/…/sparrow-agent-linux-amd64",
+                               "sha256": "<64hex>" } },
+  "installScript": "/agent/install.sh",
+  "signature": ""
+}
+```
+
+- 平台键与 `internal/update.PlatformKey()` 一致
+- 数据来源：`settings` 表 key = `agent_release`，由发布流程写入
+  （`src/agent/scripts/release.sh` → `panel-release.json` → `src/panel/scripts/publish-agent-release.mjs`），面板只读
+- 未配置时返回 `{ "source": "none", "assets": {} }` + HTTP 200，前端提示「尚未配置 Agent 发布源」
+- `install.sh` 同时兼容两种清单：本接口的 `{ url, sha256 }` 对象，和旧 `latest.json` 的
+  `assets[platform] = url` + `sha256[platform] = hex`；清单来源依次尝试
+  `--manifest` → `/api/v1/public/agent/release` → `/agent/latest.json`
+
 ## 10. 可观测性
 
 | 能力 | 说明 |
@@ -264,11 +292,11 @@ WantedBy=multi-user.target
 
 | 方式 | 命令 |
 |---|---|
-| 一键脚本 | `curl -fsSL https://panel.example.com/install.sh \| sh`（面板生成，含面板地址与注册 token） |
-| 手动 | 下载二进制 → 写配置 → `systemctl enable --now sparrow-agent` |
+| 一键脚本 | `curl -fsSL https://panel.example.com/agent/install.sh \| sudo sh -s -- --url https://panel.example.com --token <token>` |
+| 手动 | 下载二进制（GitHub Release）→ 写配置 → `systemctl enable --now sparrow-agent` |
 | Docker | `docker run -d --name sparrow-agent -v /etc/sparrow-agent:/etc/sparrow-agent -v /var/lib/sparrow-agent:/var/lib/sparrow-agent <image>` |
 
-安装脚本必须校验二进制 sha256（面板提供）。
+安装脚本必须校验二进制 sha256（来自面板发布元信息 / latest.json）。
 
 ## 13. 测试策略
 

@@ -5,6 +5,9 @@
 #   ./install.sh --url https://panel.example.com --token <token>
 #   ./install.sh --url https://panel.example.com --from-url https://cdn/latest/sparrow-agent-linux-amd64 --sha256 <64hex>
 #
+# 二进制不再由面板托管：清单默认取 $PANEL_URL/api/v1/public/agent/release，
+# 里面的地址指向 GitHub Release（或自建 CDN），sha256 也必须由清单给出。
+#
 # 幂等：重复执行不会报错；升级时会先停服务、备份旧二进制（.bak）再替换。
 # 只做这几件事：装二进制、写配置（0600）、建数据目录、装 systemd 单元、enabl+start。
 # 详细说明见 src/agent/README.md「发布与安装」。
@@ -55,9 +58,12 @@ Sparrow Agent 安装脚本
   --token <token>      面板「节点管理」生成的一次性注册令牌（--no-register 时可不填）
 
 选项:
-  --version <ver>      要安装的版本（默认 latest；面板源不可用时仅作记录）
-  --from-url <url>     直接从该地址下载二进制，绕过面板下载接口
-  --manifest <url>     release 清单地址（默认 <panel>/api/v1/public/agent/latest.json）
+  --version <ver>      要安装的版本（默认取清单里的 version）
+  --from-url <url>     直接从该地址下载二进制，绕过清单
+  --manifest <url>     显式指定清单（本地路径 / file:// / http(s) 均可）
+                       默认依次尝试 <panel>/api/v1/public/agent/release
+                       与旧路径 <panel>/agent/latest.json
+                       （清单格式见 docs/architecture/agent-cli.md §9）
   --sha256 <hex>       二进制 sha256；不给则从 release 清单读取，都拿不到就中止
   --force              覆盖已存在的 /etc/sparrow-agent/config.yaml
   --no-register        安装后不调用 `sparrow-agent register`
@@ -65,13 +71,23 @@ Sparrow Agent 安装脚本
   --dry-run            只打印将要执行的动作，不做任何修改
   -h, --help           显示本帮助
 
-示例:
-  # 面板已提供下载接口时
-  curl -fsSL https://panel.example.com/install.sh | sudo sh -s -- --url https://panel.example.com --token abc
+环境变量（彩排用，生产保持默认）:
+  SPARROW_PLATFORM     覆盖平台探测结果，如 linux-amd64
+  SPARROW_BIN_DIR / SPARROW_CONF_DIR / SPARROW_DATA_DIR ...
+                       覆盖安装路径，便于在容器里试运行
 
-  # 面板接口还没实现（当前状态）：自带地址 + 校验值
+示例:
+  # 面板已配置 Agent 发布源（默认取 /api/v1/public/agent/release）
+  curl -fsSL https://panel.example.com/agent/install.sh | sudo sh -s -- \
+    --url https://panel.example.com --token abc
+
+  # 清单在别处（例如自建 CDN 的 latest.json）
   sudo ./install.sh --url https://panel.example.com --token abc \
-    --from-url https://github.com/acme/sparrow/releases/download/agent/v0.2.0/sparrow-agent-linux-amd64 \
+    --manifest https://cdn.example.com/sparrow-agent/latest.json
+
+  # 面板还没配置发布源：自带地址 + 校验值
+  sudo ./install.sh --url https://panel.example.com --token abc \
+    --from-url https://github.com/acme/sparrow/releases/download/agent%2Fv0.2.0/sparrow-agent-linux-amd64 \
     --sha256 9f8c...e1
 EOF
 }
@@ -176,6 +192,13 @@ detect_platform() {
 
 detect_platform
 
+# 彩排/CI 可显式指定平台键（如 SPARROW_PLATFORM=linux-amd64），生产不需要
+if [ -n "${SPARROW_PLATFORM:-}" ]; then
+	PLATFORM=$SPARROW_PLATFORM
+	OS=${PLATFORM%%-*}
+	ARCH=${PLATFORM#*-}
+fi
+
 case "$OS" in
 linux) ;;
 *) [ "$DRY_RUN" -eq 1 ] || die "本脚本只支持 Linux（当前 ${OS}）；macOS 请直接 make build 后手动运行" ;;
@@ -185,33 +208,7 @@ amd64 | arm64 | armv7) ;;
 *) [ "$DRY_RUN" -eq 1 ] || die "不支持的架构 ${ARCH}（支持 amd64 / arm64 / armv7）；可用 --from-url 指定自编译产物" ;;
 esac
 
-# ---------------------------------------------------------------- URL / 校验值
-
-DEFAULT_BINARY_URL="$PANEL_URL/api/v1/public/agent/download/$VERSION/$PLATFORM"
-BINARY_URL=${FROM_URL:-$DEFAULT_BINARY_URL}
-[ -n "$MANIFEST_URL" ] || MANIFEST_URL="$PANEL_URL/api/v1/public/agent/latest.json"
-
-if [ "$DRY_RUN" -eq 1 ]; then
-	cat <<EOF
-[dry-run] 将执行以下动作（不落地）：
-  平台:        $PLATFORM
-  二进制来源:  $BINARY_URL
-  清单来源:    $MANIFEST_URL
-  sha256:      ${SHA256:-<从清单读取>}
-  安装到:      $BIN_DIR/$BIN_NAME
-  配置:        ${CONF_FILE}（已存在时保留，除非 --force）
-  数据目录:    $DATA_DIR
-  日志:        $LOG_FILE
-  systemd:     ${UNIT_FILE}（enable=${START_SERVICE}）
-  注册:        $([ "$DO_REGISTER" -eq 1 ] && echo yes || echo no)
-EOF
-	exit 0
-fi
-
-[ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] || die "需要 root 权限：sudo $0 ..."
-
-command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 ||
-	die "需要 curl 或 wget"
+# ---------------------------------------------------------------- 临时目录 / 抓取
 
 TMP_DIR=$(mktemp -d)
 cleanup() { rm -rf "$TMP_DIR"; }
@@ -233,6 +230,24 @@ download() { # download URL FILE
 	fi
 }
 
+# fetch_file SRC DEST：本地路径 / file:// 直接拷贝，其余走 curl/wget
+fetch_file() {
+	case "$1" in
+	file://*)
+		_src=${1#file://}
+		[ -f "$_src" ] || return 1
+		cp "$_src" "$2"
+		;;
+	/* | ./* | ../*)
+		[ -f "$1" ] || return 1
+		cp "$1" "$2"
+		;;
+	*)
+		download "$1" "$2"
+		;;
+	esac
+}
+
 sha256_of() {
 	if command -v sha256sum >/dev/null 2>&1; then
 		sha256sum "$1" | awk '{print $1}'
@@ -245,55 +260,246 @@ sha256_of() {
 	fi
 }
 
-# manifest_sha FILE PLATFORM → 打印 64 位 hex，找不到返回 1
-manifest_sha() {
-	_block=$(sed -n '/"sha256"[[:space:]]*:/,/}/p' "$1" 2>/dev/null || true)
-	[ -n "$_block" ] || return 1
-	_hex=$(printf '%s\n' "$_block" | grep -F "\"$2\"" | sed -n 's/.*"\([0-9a-fA-F]\{64\}\)".*/\1/p' | head -n 1)
-	[ -n "$_hex" ] || return 1
-	printf '%s\n' "$_hex"
+# ---------------------------------------------------------------- 清单解析
+#
+# 两种格式（见 docs/architecture/agent-cli.md §9）：
+#   新（面板 /api/v1/public/agent/release）：
+#     { "assets": { "linux-amd64": { "url": "...", "sha256": "<64hex>" } } }
+#   旧（/agent/latest.json）：
+#     { "assets": { "linux-amd64": "<url>" }, "sha256": { "linux-amd64": "<64hex>" } }
+#
+# 节点上不一定有 jq，这里用 awk 做一个只够用的 JSON 读取器：
+# compact 压成单行，然后按「平衡花括号 + 第一层键」取值。
+
+# compact FILE → 单行 JSON（去掉换行/制表，压缩冒号两侧空白）
+compact() {
+	tr -d '\n\r\t' <"$1" | sed 's/[[:space:]]*:[[:space:]]*/:/g'
 }
 
-# manifest_asset URL PLATFORM → 打印该平台的下载地址，找不到返回 1
-manifest_asset() {
-	_block=$(sed -n '/"assets"[[:space:]]*:/,/}/p' "$1" 2>/dev/null || true)
-	[ -n "$_block" ] || return 1
-	_url=$(printf '%s\n' "$_block" | grep -F "\"$2\"" | sed -n 's/.*"\(https*:\/\/[^"]*\)".*/\1/p' | head -n 1)
-	[ -n "$_url" ] || return 1
-	printf '%s\n' "$_url"
+# json_member OBJECT KEY → 打印该键的原样值（{...} / [...] / "..."），找不到返回 1
+json_member() {
+	printf '%s' "$1" | awk -v want="$2" '
+	{
+		s = $0; n = length(s); depth = 0
+		for (i = 1; i <= n; i++) {
+			c = substr(s, i, 1)
+			if (c == "{") { depth++; continue }
+			if (c == "}") { depth--; continue }
+			if (c != "\"" || depth != 1) continue
+			j = i + 1
+			while (j <= n && substr(s, j, 1) != "\"") j++
+			name = substr(s, i + 1, j - i - 1)
+			k = j + 1
+			if (substr(s, k, 1) != ":") { i = j; continue }
+			k++
+			if (name == want) {
+				if (substr(s, k, 1) == "{") {
+					d = 0
+					for (m = k; m <= n; m++) {
+						cc = substr(s, m, 1)
+						if (cc == "{") d++
+						else if (cc == "}") { d--; if (d == 0) { print substr(s, k, m - k + 1); exit 0 } }
+					}
+					exit 1
+				}
+				if (substr(s, k, 1) == "[") {
+					d = 0
+					for (m = k; m <= n; m++) {
+						cc = substr(s, m, 1)
+						if (cc == "[") d++
+						else if (cc == "]") { d--; if (d == 0) { print substr(s, k, m - k + 1); exit 0 } }
+					}
+					exit 1
+				}
+				if (substr(s, k, 1) == "\"") {
+					m = k + 1
+					while (m <= n && substr(s, m, 1) != "\"") m++
+					print substr(s, k, m - k + 1)
+					exit 0
+				}
+				exit 1
+			}
+			i = j
+		}
+		exit 1
+	}'
 }
 
-MANIFEST_FILE="$TMP_DIR/latest.json"
-HAVE_MANIFEST=0
-if download "$MANIFEST_URL" "$MANIFEST_FILE" 2>/dev/null; then
-	HAVE_MANIFEST=1
-	info "已获取 release 清单: $MANIFEST_URL"
+# json_keys OBJECT → 第一层键名，每行一个
+json_keys() {
+	printf '%s' "$1" | awk '
+	{
+		s = $0; n = length(s); depth = 0
+		for (i = 1; i <= n; i++) {
+			c = substr(s, i, 1)
+			if (c == "{") { depth++; continue }
+			if (c == "}") { depth--; continue }
+			if (c != "\"" || depth != 1) continue
+			j = i + 1
+			while (j <= n && substr(s, j, 1) != "\"") j++
+			name = substr(s, i + 1, j - i - 1)
+			k = j + 1
+			if (substr(s, k, 1) == ":") print name
+			i = j
+		}
+	}'
+}
+
+# json_string OBJECT KEY → 去掉引号的字符串值，不是字符串则返回 1
+json_string() {
+	_v=$(json_member "$1" "$2") || return 1
+	case "$_v" in
+	\"*\") printf '%s' "$_v" | sed 's/^"//; s/"$//' ;;
+	*) return 1 ;;
+	esac
+}
+
+# manifest_version FILE → 清单里的 version（没有则返回 1）
+manifest_version() {
+	json_string "$(compact "$1")" version
+}
+
+# manifest_platforms FILE → assets 里的平台键，每行一个
+manifest_platforms() {
+	_text=$(compact "$1")
+	_assets=$(json_member "$_text" assets) || return 1
+	json_keys "$_assets"
+}
+
+# manifest_for_platform FILE PLATFORM → 打印 "url sha256"（字段可能为空），没有该平台返回 1
+manifest_for_platform() {
+	_text=$(compact "$1")
+	_assets=$(json_member "$_text" assets) || return 1
+	_member=$(json_member "$_assets" "$2") || return 1
+	case "$_member" in
+	\"*\")
+		# 旧格式：assets[platform] = "url"，sha256 在独立的 sha256 对象里
+		_url=$(printf '%s' "$_member" | sed 's/^"//; s/"$//')
+		_sha=""
+		if _su=$(json_member "$_text" sha256); then
+			_sha=$(json_string "$_su" "$2") || _sha=""
+		fi
+		;;
+	\{*\})
+		# 新格式：assets[platform] = { url, sha256 }
+		_url=$(json_string "$_member" url) || _url=""
+		_sha=$(json_string "$_member" sha256) || _sha=""
+		;;
+	*) return 1 ;;
+	esac
+	printf '%s %s\n' "$_url" "$_sha"
+}
+
+# join_url BASE URL：相对地址（以 / 开头）拼到面板地址上
+join_url() {
+	case "$2" in
+	/*) printf '%s%s\n' "${1%/}" "$2" ;;
+	*) printf '%s\n' "$2" ;;
+	esac
+}
+
+# ---------------------------------------------------------------- URL / 校验值
+
+DEFAULT_BINARY_URL="$PANEL_URL/api/v1/public/agent/download/$VERSION/$PLATFORM"
+BINARY_URL=${FROM_URL:-$DEFAULT_BINARY_URL}
+MANIFEST_SOURCE=""
+SHA_FROM_MANIFEST=0
+_available=""
+
+if [ -n "$MANIFEST_URL" ]; then
+	MANIFEST_SOURCES=$MANIFEST_URL
+	MANIFEST_EXPLICIT=1
 else
-	warn "无法获取 release 清单: $MANIFEST_URL"
+	# 新接口优先；旧路径兜底（面板未配置发布源时新接口返回 assets: {}）
+	MANIFEST_SOURCES="$PANEL_URL/api/v1/public/agent/release $PANEL_URL/agent/latest.json"
+	MANIFEST_EXPLICIT=0
 fi
 
-if [ "$HAVE_MANIFEST" -eq 1 ]; then
+_resolved=""
+for _src in $MANIFEST_SOURCES; do
+	_file="$TMP_DIR/manifest.json"
+	if ! fetch_file "$_src" "$_file" 2>/dev/null; then
+		[ "$MANIFEST_EXPLICIT" -eq 1 ] && die "无法获取 release 清单: $_src"
+		warn "无法获取 release 清单: $_src"
+		continue
+	fi
+
+	_platforms=$(manifest_platforms "$_file" || true)
+	if [ -z "$_platforms" ]; then
+		[ "$MANIFEST_EXPLICIT" -eq 1 ] && die "清单 $_src 里没有 assets（面板可能尚未配置 Agent 发布源）"
+		warn "清单 $_src 没有 assets，尝试下一个来源"
+		continue
+	fi
+
+	if ! _pair=$(manifest_for_platform "$_file" "$PLATFORM"); then
+		_available=$_platforms
+		if [ "$MANIFEST_EXPLICIT" -eq 1 ]; then
+			die "清单 $_src 里没有当前平台 $PLATFORM
+可用平台：$(printf '%s' "$_platforms" | tr '\n' ' ')"
+		fi
+		warn "清单 $_src 没有当前平台 ${PLATFORM}，尝试下一个来源"
+		continue
+	fi
+
+	_resolved=$_pair
+	MANIFEST_SOURCE=$_src
+	info "已获取 release 清单: $_src"
+	break
+done
+
+if [ -n "$_resolved" ]; then
+	_murl=${_resolved% *}
+	_msha=${_resolved#* }
+
 	if [ "$VERSION" = "latest" ]; then
-		_manifest_version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST_FILE" | head -n 1)
-		[ -n "$_manifest_version" ] && VERSION=$_manifest_version
+		_mver=$(manifest_version "$TMP_DIR/manifest.json" || true)
+		[ -n "$_mver" ] && VERSION=$_mver
 	fi
-	if [ -z "$FROM_URL" ] && [ "$BINARY_URL" = "$DEFAULT_BINARY_URL" ]; then
-		_manifest_url=$(manifest_asset "$MANIFEST_FILE" "$PLATFORM" || true)
-		[ -n "$_manifest_url" ] && BINARY_URL=$_manifest_url
+
+	if [ -z "$FROM_URL" ] && [ -n "$_murl" ]; then
+		BINARY_URL=$(join_url "$PANEL_URL" "$_murl")
 	fi
-	if [ -z "$SHA256" ]; then
-		SHA256=$(manifest_sha "$MANIFEST_FILE" "$PLATFORM" || true)
-		[ -n "$SHA256" ] && info "从清单取到 $PLATFORM 的 sha256"
+
+	if [ -z "$SHA256" ] && [ -n "$_msha" ]; then
+		SHA256=$_msha
+		SHA_FROM_MANIFEST=1
+		info "从清单取到 $PLATFORM 的 sha256"
 	fi
+elif [ -n "$_available" ]; then
+	die "当前平台 $PLATFORM 不在发布清单里
+可用平台：$(printf '%s' "$_available" | tr '\n' ' ')
+可用 --from-url + --sha256 指定自编译产物"
 fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+	cat <<EOF
+[dry-run] 将执行以下动作（不落地）：
+  平台:        $PLATFORM
+  二进制来源:  $BINARY_URL
+  清单来源:    ${MANIFEST_SOURCE:-<无可用清单>}
+  sha256:      ${SHA256:-<从清单读取>}$([ "$SHA_FROM_MANIFEST" -eq 1 ] && echo "（来自清单）")
+  安装到:      $BIN_DIR/$BIN_NAME
+  配置:        ${CONF_FILE}（已存在时保留，除非 --force）
+  数据目录:    $DATA_DIR
+  日志:        $LOG_FILE
+  systemd:     ${UNIT_FILE}（enable=${START_SERVICE}）
+  注册:        $([ "$DO_REGISTER" -eq 1 ] && echo yes || echo no)
+EOF
+	exit 0
+fi
+
+[ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] || die "需要 root 权限：sudo $0 ..."
+
+command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 ||
+	die "需要 curl 或 wget"
 
 if [ -z "$SHA256" ]; then
 	if [ "$BINARY_URL" = "$DEFAULT_BINARY_URL" ]; then
 		cat >&2 <<EOF
 [错误] 无法校验二进制，安装中止。
 
-面板还没有提供下载/清单接口（/api/v1/public/agent/download/* 与
-/api/v1/public/agent/latest.json 均未实现，见 docs/architecture/agent-cli.md §9/§12），
+面板没有提供可用的 Agent 发布清单（/api/v1/public/agent/release 与
+/agent/latest.json 都没取到 $PLATFORM 的地址与 sha256），
 本脚本拒绝在无法校验 sha256 的情况下安装二进制。
 
 请改用下面任一方式：
@@ -302,7 +508,7 @@ if [ -z "$SHA256" ]; then
        --from-url https://<你的源>/sparrow-agent-$PLATFORM \\
        --sha256 <64 位 hex>
 
-  2) 先发布一份 release 清单（deploy/release.example.json 格式），再：
+  2) 显式指定 release 清单（install.sh 支持的面板版 / latest.json 版都行）：
      sudo $0 --url $PANEL_URL --token <token> \\
        --manifest https://<你的源>/latest.json
 

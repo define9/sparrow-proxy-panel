@@ -43,6 +43,9 @@ RUN addgroup -g 1001 nodejs && adduser -u 1001 -G nodejs -s /bin/sh -D nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/src/panel/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/src/panel/.next/static ./src/panel/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/src/panel/public ./src/panel/public
+# install.sh 随 Agent 版本演进：构建期从仓库里的安装脚本覆盖 public 快照。
+# 只带脚本（几 KB），**不带二进制**——二进制在 GitHub Release，由节点直接下载。
+COPY --from=builder --chown=nextjs:nodejs /app/src/agent/deploy/install.sh /app/src/panel/public/agent/install.sh
 
 USER nextjs
 EXPOSE 3000

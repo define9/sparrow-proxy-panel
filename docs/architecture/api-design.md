@@ -266,6 +266,7 @@ METHOD \n PATH \n TIMESTAMP \n NONCE \n SHA256(body)
 | GET | `/admin/settings` | `admin:settings:read` |
 | PUT | `/admin/settings` | `admin:settings:write` |
 | POST | `/admin/settings/mail/test` | `admin:settings:write`（用当前配置发测试信） |
+| GET | `/admin/agent/release` | `admin:settings:read`（当前 Agent 发布源 / 平台 / 更新时间） |
 | GET | `/admin/payment/gateways` | `admin:settings:read`（渠道声明 + 脱敏配置） |
 | PUT | `/admin/payment/gateways/{key}` | `admin:settings:write`（`••••` 表示不修改密钥） |
 | POST | `/admin/payment/gateways/{key}/test` | `admin:settings:write`（逐项 checks） |
@@ -289,6 +290,7 @@ METHOD \n PATH \n TIMESTAMP \n NONCE \n SHA256(body)
 | `POST /api/v1/pay/{gateway}/callback` | 支付回调（网关插件注册） |
 | `POST /api/v1/plugin/callback/{pluginKey}` | 插件主动回调 |
 | `GET /api/v1/public/status` | 面板状态（供节点/监控探活） |
+| `GET /api/v1/public/agent/release` | Agent 发布元信息（版本 / 平台 / 下载地址 / sha256；未配置返回 `source: "none"`） |
 
 订阅输出要点：
 - 返回体为纯文本（`text/plain; charset=utf-8` 或 `application/yaml`）

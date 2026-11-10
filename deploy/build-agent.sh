@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # ============================================================
-# 构建节点 Agent 二进制，并生成面板可分发的目录 agent-dist/
+# 【已废弃】用 GitHub Release 分发，二进制不进面板：
+#   src/agent/scripts/release.sh --upload  →  gh release create
+#   src/panel/scripts/publish-agent-release.mjs → 写面板 settings.agent_release
+# 本脚本只保留给「完全离线 / 自建 CDN」的场景：产出 agent-dist/ 后自行托管。
+#
+# 构建节点 Agent 二进制，并生成可分发的目录 agent-dist/
 #
 #   ./build-agent.sh [版本号]
 #
-# 产物（会被挂载到面板容器的 /app/src/panel/public/agent）：
+# 产物：
 #   agent-dist/sparrow-agent-linux-amd64
 #   agent-dist/sparrow-agent-linux-arm64
 #   agent-dist/sparrow-agent-linux-armv7
@@ -80,8 +85,9 @@ EOF
 
 ls -lh "$OUT" | sed 's/^/  /'
 echo
-log "完成。让面板对外提供这些文件："
-echo "  cd $(dirname "$0") && docker compose up -d panel   # 挂载 agent-dist 到 /app/src/panel/public/agent"
+log "完成。二进制不进面板：把 agent-dist/ 放到你自己的静态源（自建 CDN）"
+echo "  面板发布源配置（settings key = agent_release）里把 assets 指向该源即可；"
+echo "  常规流程请改用 src/agent/scripts/release.sh --upload（GitHub Release）。"
 echo
 log "节点上一条命令安装（把 <token> 换成面板里的一次性注册令牌）："
 cat <<EOF
