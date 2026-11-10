@@ -87,8 +87,12 @@ Next 16 起 `middleware.ts` **已废弃**，改名 `proxy.ts`（导出 `proxy` �
 
 **回退保证**：主题文件缺失或读取失败 → 回退面板落地页 + 记日志，**绝不 500**。
 
-**无需重启**：激活态存 `settings` 表（key=`theme`），proxy 每次请求读取（进程内缓存 5 秒），
-激活/卸载后主动失效缓存。
+**无需重启**：激活态存 `settings` 表（key=`theme`，值含 `active` 与 `version`），
+proxy 每次请求读取（进程内缓存 1 秒）；激活/卸载/安装时调用 `invalidateThemeCache()` 立即失效。
+
+> ⚠️ Next 的 proxy 与 route handler 是**两个独立的模块图**，模块级变量互不可见。
+> 所以主题缓存挂在 `globalThis` 上，并且激活态里带 `version` 字段做兜底：
+> 即使跨进程/跨实例，读到 `version` 变化也会丢弃本地缓存。
 
 ## 5. 存储
 

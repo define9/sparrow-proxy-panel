@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { asc, eq } from 'drizzle-orm'
 import { ApiError } from '@/lib/api/response'
 import { db } from '@/lib/db'
+import { invalidateThemeCache } from './runtime'
 import { plugins, settings } from '@/lib/db/schema'
 import type { ThemeManifest } from './manifest'
 import {
@@ -81,7 +82,9 @@ export async function getThemeSetting(): Promise<ThemeSetting> {
 }
 
 async function writeThemeSetting(active: string | null): Promise<ThemeSetting> {
-  const value = JSON.stringify({ active })
+  // 带 version：即使 proxy 与 API 不在同一进程（globalThis 不共享），
+  // 运行时读到 version 变化也能立刻丢弃本地缓存。
+  const value = JSON.stringify({ active, version: Date.now() })
   await db
     .insert(settings)
     .values({ key: THEME_SETTING_KEY, value, updatedAt: new Date() })
@@ -89,6 +92,8 @@ async function writeThemeSetting(active: string | null): Promise<ThemeSetting> {
       target: settings.key,
       set: { value, updatedAt: new Date() }
     })
+  // 激活态一变就让运行时缓存立刻失效，保证「安装/激活后立即生效」
+  invalidateThemeCache()
   return { active }
 }
 

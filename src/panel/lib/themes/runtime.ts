@@ -19,7 +19,7 @@ export const THEME_SETTINGS_KEY = 'theme'
 export const THEME_ASSETS_PREFIX = '/theme-assets'
 
 /** 激活态缓存 5 秒：避免每个公开请求都查库 */
-const ACTIVE_TTL_MS = 5_000
+const ACTIVE_TTL_MS = 1_000
 /** manifest 缓存 10 秒：安装/卸载后由 invalidateThemeCache() 主动失效 */
 const MANIFEST_TTL_MS = 10_000
 
@@ -54,11 +54,28 @@ export interface ActiveTheme {
   distDir: string
 }
 
-type ActiveCache = { key: string | null; at: number } | null
+type ActiveCache = { key: string | null; at: number; version: number } | null
 type ManifestCacheEntry = { meta: ThemeMeta | null; at: number }
 
-let activeCache: ActiveCache = null
-const manifestCache = new Map<string, ManifestCacheEntry>()
+/**
+ * 缓存挂在 globalThis 上：Next 的 proxy 与 route handler 是**两个独立的模块图**，
+ * 模块级变量互不可见。挂在 globalThis 才能让「管理端激活主题 → proxy 立刻看到」
+ * （否则最多要等 5 秒缓存过期）。
+ */
+interface ThemeCacheStore {
+  active: ActiveCache
+  manifests: Map<string, ManifestCacheEntry>
+  /** 每次写入激活态时递增，proxy 用它判断是否需要重新读库 */
+  version: number
+}
+
+const globalForTheme = globalThis as unknown as { __sparrowThemeCache?: ThemeCacheStore }
+
+const store: ThemeCacheStore = (globalForTheme.__sparrowThemeCache ??= {
+  active: null,
+  manifests: new Map<string, ManifestCacheEntry>(),
+  version: 0
+})
 
 /** 主题根目录；THEME_DIR 优先，否则 <cwd>/data/themes */
 export function themesRootDir(): string {
@@ -68,8 +85,9 @@ export function themesRootDir(): string {
 
 /** 激活/卸载/更新主题后调用，让进程内缓存立刻失效 */
 export function invalidateThemeCache(): void {
-  activeCache = null
-  manifestCache.clear()
+  store.active = null
+  store.manifests.clear()
+  store.version += 1
 }
 
 /** 只接受安全的主题 key，避免通过 settings 值做路径穿越 */
@@ -79,7 +97,7 @@ function isSafeThemeKey(key: string): boolean {
 
 async function readActiveKey(): Promise<string | null> {
   const now = Date.now()
-  if (activeCache && now - activeCache.at < ACTIVE_TTL_MS) return activeCache.key
+  if (store.active && now - store.active.at < ACTIVE_TTL_MS) return store.active.key
 
   try {
     const rows = await db
@@ -90,15 +108,18 @@ async function readActiveKey(): Promise<string | null> {
 
     const raw = rows[0]?.value
     let key: string | null = null
+    let version = 0
     if (raw) {
       const parsed: unknown = JSON.parse(raw)
       if (parsed && typeof parsed === 'object' && 'active' in parsed) {
-        const active = (parsed as { active?: unknown }).active
+        const obj = parsed as { active?: unknown; version?: unknown }
+        const active = obj.active
         if (typeof active === 'string' && isSafeThemeKey(active)) key = active
+        if (typeof obj.version === 'number') version = obj.version
       }
     }
 
-    activeCache = { key, at: now }
+    store.active = { key, at: now, version }
     return key
   } catch (error) {
     // 数据库暂时不可用：不缓存失败结果，下一个请求重试；本次按「无激活主题」处理
@@ -128,11 +149,11 @@ async function readMetaFile(key: string): Promise<ThemeMeta | null> {
 export async function getThemeManifest(key: string): Promise<ThemeMeta | null> {
   if (!isSafeThemeKey(key)) return null
   const now = Date.now()
-  const hit = manifestCache.get(key)
+  const hit = store.manifests.get(key)
   if (hit && now - hit.at < MANIFEST_TTL_MS) return hit.meta
 
   const meta = await readMetaFile(key)
-  manifestCache.set(key, { meta, at: now })
+  store.manifests.set(key, { meta, at: now })
   return meta
 }
 

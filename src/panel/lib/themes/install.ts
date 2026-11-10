@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { and, eq, ne } from 'drizzle-orm'
 import { ApiError } from '@/lib/api/response'
 import { db } from '@/lib/db'
+import { invalidateThemeCache } from './runtime'
 import { plugins, taskRuns } from '@/lib/db/schema'
 import {
   parseThemeManifestJson,
@@ -512,6 +513,9 @@ export async function installThemeFromRepo(input: InstallThemeInput): Promise<In
       distSha256: staged.distSha256,
       durationMs: Date.now() - startedAt
     })
+
+    // 新装/升级后主题文件与 manifest 都变了，让运行时缓存失效
+    invalidateThemeCache()
 
     return {
       key: manifest.key,
