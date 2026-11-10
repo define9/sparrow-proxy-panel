@@ -72,7 +72,8 @@
     "language": "Language",
     "light": "Light",
     "dark": "Dark",
-    "system": "System"
+    "system": "System",
+    "site": "Front site"
   },
   "search": {
     "placeholder": "Search pages, orders, nodes…",

@@ -72,7 +72,8 @@
     "language": "语言",
     "light": "浅色",
     "dark": "深色",
-    "system": "跟随系统"
+    "system": "跟随系统",
+    "site": "前往前台"
   },
   "search": {
     "placeholder": "搜索页面、订单、节点…",

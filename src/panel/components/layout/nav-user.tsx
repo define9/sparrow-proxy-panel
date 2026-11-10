@@ -5,7 +5,18 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { useTheme } from 'next-themes'
-import { Check, ChevronsUpDown, Globe, LayoutDashboard, LogOut, Monitor, Moon, Settings, Sun } from 'lucide-react'
+import {
+  Check,
+  ChevronsUpDown,
+  ExternalLink,
+  Globe,
+  LayoutDashboard,
+  LogOut,
+  Monitor,
+  Moon,
+  Settings,
+  Sun
+} from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -116,6 +127,12 @@ export function NavUser({ user }: { user: SessionUser }) {
               ) : null}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/" target="_blank" rel="noreferrer">
+                <ExternalLink />
+                {t('site')}
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <Sun />

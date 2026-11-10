@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useLocale } from 'next-intl'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, ExternalLink } from 'lucide-react'
 import {
   Collapsible,
   CollapsibleContent,
@@ -154,7 +154,17 @@ export function AppSidebar({ navKey, permissions, title, user }: AppSidebarProps
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser user={user} />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip={locale === 'en' ? 'Front site' : '前往前台'}>
+              <Link href="/" target="_blank" rel="noreferrer">
+                <ExternalLink />
+                <span>{locale === 'en' ? 'Front site' : '前往前台'}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <NavUser user={user} />
+        </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
