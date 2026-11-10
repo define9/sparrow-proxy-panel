@@ -24,7 +24,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
               <Link href="/register">免费试用</Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">
-              <Link href="/dashboard">进入控制台</Link>
+              <Link href="/dashboard">进入用户中心</Link>
             </Button>
           </div>
         </div>

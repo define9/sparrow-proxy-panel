@@ -73,7 +73,8 @@
     "light": "Light",
     "dark": "Dark",
     "system": "System",
-    "site": "Front site"
+    "site": "Site home",
+    "console": "User console"
   },
   "search": {
     "placeholder": "Search pages, orders, nodes…",

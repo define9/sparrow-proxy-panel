@@ -9,6 +9,7 @@ import {
   Check,
   ChevronsUpDown,
   ExternalLink,
+  Gauge,
   Globe,
   LayoutDashboard,
   LogOut,
@@ -127,6 +128,12 @@ export function NavUser({ user }: { user: SessionUser }) {
               ) : null}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard">
+                <Gauge />
+                {t('console')}
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/" target="_blank" rel="noreferrer">
                 <ExternalLink />

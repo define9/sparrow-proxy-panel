@@ -73,7 +73,8 @@
     "light": "浅色",
     "dark": "深色",
     "system": "跟随系统",
-    "site": "前往前台"
+    "site": "站点首页",
+    "console": "用户中心"
   },
   "search": {
     "placeholder": "搜索页面、订单、节点…",
