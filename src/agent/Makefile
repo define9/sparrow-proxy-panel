@@ -3,13 +3,17 @@ PKG := ./cmd/sparrow-agent
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w
 
-.PHONY: build test vet fmt lint run clean cross
+.PHONY: build test vet fmt lint run clean cross test-install
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) $(PKG)
 
 test:
 	go test ./...
+
+# 安装脚本的清单解析测试（shell）
+test-install:
+	sh deploy/install_test.sh
 
 vet:
 	go vet ./...
@@ -19,6 +23,7 @@ fmt:
 
 lint: vet
 	@test -z "$$(gofmt -l .)" || (echo "有文件未格式化，运行 make fmt"; exit 1)
+	@sh deploy/install_test.sh >/dev/null && echo "install.sh 测试通过" 
 
 run: build
 	./bin/$(BINARY) run -c deploy/config.example.yaml

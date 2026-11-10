@@ -75,9 +75,12 @@ function str(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-/** agent/v0.1.0 → 0.1.0；识别不出来就空串 */
+/**
+ * agent/v0.1.0 → 0.1.0
+ * v0.1.0 / 0.1.0 / 1.0.0-beta.1 也要认；识别不出来返回空串（不抛错）
+ */
 export function versionFromTag(tag: string): string {
-  const match = /(?:^|\/)(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$/.exec(tag)
+  const match = /(?:^|\/)v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$/.exec(tag.trim())
   return match?.[1] ?? ''
 }
 

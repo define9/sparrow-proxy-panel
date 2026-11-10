@@ -51,6 +51,8 @@ for (const file of files) {
 const serviceDir = join(root, 'lib/services')
 for (const file of walk(serviceDir)) {
   if (!file.endsWith('.ts')) continue
+  // 测试文件不需要 server-only（vitest 里是 stub）
+  if (file.endsWith('.test.ts')) continue
   const source = readFileSync(file, 'utf8')
   if (!SERVER_ONLY.test(source)) {
     warnings.push(`${rel(file)} 缺少 import 'server-only'`)

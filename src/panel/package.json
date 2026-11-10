@@ -16,7 +16,9 @@
     "db:seed": "node --env-file=.env --import tsx scripts/seed.ts",
     "db:studio": "drizzle-kit studio",
     "check:layers": "node scripts/check-layers.mjs",
-    "db:migrate:prod": "node scripts/migrate.mjs"
+    "db:migrate:prod": "node scripts/migrate.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -55,6 +57,7 @@
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.1.0"
   }
 }
