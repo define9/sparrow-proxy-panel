@@ -25,23 +25,24 @@
 | 10 | [architecture/notify-providers.md](architecture/notify-providers.md) | 邮件 provider 抽象：Resend / 本地日志、密钥脱敏、测试发送 |
 | 11 | [architecture/agent-cli.md](architecture/agent-cli.md) | Agent 实现状态、配置、运行循环、自更新、离线容错 |
 | 12 | [architecture/agent-sign-vectors.md](architecture/agent-sign-vectors.md) | Panel ↔ Agent 的 HMAC 固定测试向量（跨端对齐基准） |
-| 13 | [architecture/security.md](architecture/security.md) | 威胁模型、密钥管理、支付安全、上线检查清单 |
+| 13 | [architecture/themes.md](architecture/themes.md) | **主题系统**：独立前端项目、GitHub topic 发现、运行时接管、安全红线 |
+| 14 | [architecture/security.md](architecture/security.md) | 威胁模型、密钥管理、支付安全、上线检查清单 |
 
 ### 前端
 
 | # | 文档 | 内容 |
 |---|---|---|
-| 14 | [frontend/frontend-architecture.md](frontend/frontend-architecture.md) | 目录、布局、路由、数据获取、性能（预取/缓存） |
-| 15 | [frontend/design-system.md](frontend/design-system.md) | shadcn CSS 变量、状态色、图标、字体、明暗模式 |
-| 16 | [frontend/i18n.md](frontend/i18n.md) | next-intl 方案、key 规范、CI 校验 |
-| 17 | [frontend/navigation.md](frontend/navigation.md) | 菜单与路由、权限过滤、命令面板、快捷键、守卫 |
+| 15 | [frontend/frontend-architecture.md](frontend/frontend-architecture.md) | 目录、布局、路由、数据获取、性能（预取/缓存） |
+| 16 | [frontend/design-system.md](frontend/design-system.md) | shadcn CSS 变量、状态色、图标、字体、明暗模式 |
+| 17 | [frontend/i18n.md](frontend/i18n.md) | next-intl 方案、key 规范、CI 校验 |
+| 18 | [frontend/navigation.md](frontend/navigation.md) | 菜单与路由、权限过滤、命令面板、快捷键、守卫 |
 
 ### 计划与运维
 
 | # | 文档 | 内容 |
 |---|---|---|
-| 18 | [roadmap.md](roadmap.md) | P0–P3、验收标准、风险登记（**唯一的进度记录**） |
-| 19 | [deploy-ubuntu.md](deploy-ubuntu.md) | 部署手册：装环境、起服务、反代、初始化、备份、排障 |
+| 19 | [roadmap.md](roadmap.md) | P0–P3、验收标准、风险登记（**唯一的进度记录**） |
+| 20 | [deploy-ubuntu.md](deploy-ubuntu.md) | 部署手册：装环境、起服务、反代、初始化、备份、排障 |
 
 ## 已锁定的核心决策
 
@@ -62,6 +63,7 @@
 | 插件 | 内置插件走 `plugins` 表 + manifest.configSchema；外部 git 安装未实现 | [plugin-system](architecture/plugin-system.md) |
 | 支付渠道 | 插件化（`payment-epay` / `payment-stripe`），字段由 configSchema 驱动 | [plugin-system §8](architecture/plugin-system.md) |
 | 邮件 | provider 抽象（`notify-resend` / `notify-log`），密钥加密落库 | [notify-providers](architecture/notify-providers.md) |
+| 主题 | 独立前端项目（静态产物），GitHub topic 发现，运行时接管公开路径 | [themes](architecture/themes.md) |
 | 认证 | 自建数据库会话 + RBAC + PAT + 节点 HMAC + 插件 token | [api-design](architecture/api-design.md) |
 
 ## 术语表
