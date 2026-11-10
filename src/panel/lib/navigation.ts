@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   List,
   Package,
+  Palette,
   Plug,
   Receipt,
   Rss,
@@ -96,6 +97,12 @@ export const adminNav: NavItem[] = [
     icon: ScrollText,
     href: '/admin/logs',
     permission: 'admin:log:read'
+  },
+  {
+    label: { zh: '主题', en: 'Themes' },
+    icon: Palette,
+    href: '/admin/themes',
+    permission: 'admin:settings:read'
   },
   {
     label: { zh: '系统设置', en: 'Settings' },
