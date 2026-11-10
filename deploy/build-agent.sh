@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ============================================================
-# 【已废弃】用 GitHub Release 分发，二进制不进面板：
+# 【已废弃】正常用 GitHub Release 分发，二进制不进面板：
 #   src/agent/scripts/release.sh --upload  →  gh release create
-#   src/panel/scripts/publish-agent-release.mjs → 写面板 settings.agent_release
-# 本脚本只保留给「完全离线 / 自建 CDN」的场景：产出 agent-dist/ 后自行托管。
+#   （面板 /api/v1/public/agent/release 直接代理 GitHub，没有「写面板」这一步）
+# 本脚本只保留给「完全离线 / 自建 CDN」的场景：产出 agent-dist/ 后自行托管，
+# 节点安装时用 --manifest <你的源>/agent/latest.json。
 #
 # 构建节点 Agent 二进制，并生成可分发的目录 agent-dist/
 #
@@ -86,8 +87,8 @@ EOF
 ls -lh "$OUT" | sed 's/^/  /'
 echo
 log "完成。二进制不进面板：把 agent-dist/ 放到你自己的静态源（自建 CDN）"
-echo "  面板发布源配置（settings key = agent_release）里把 assets 指向该源即可；"
-echo "  常规流程请改用 src/agent/scripts/release.sh --upload（GitHub Release）。"
+echo "  节点安装时显式指定清单：--manifest <你的源>/agent/latest.json"
+echo "  常规流程请改用 src/agent/scripts/release.sh --upload（GitHub Release，面板自动代理）。"
 echo
 log "节点上一条命令安装（把 <token> 换成面板里的一次性注册令牌）："
 cat <<EOF

@@ -2,19 +2,16 @@
 #
 # 交叉编译 + 生成发布产物 + 上传 GitHub Release（可选 ed25519 签名）。
 #
-#   VERSION=0.1.0 TAG=agent/v0.1.0 PANEL_URL=https://panel.example.com \
-#     sh scripts/release.sh --upload
+#   VERSION=0.1.0 TAG=agent/v0.1.0 sh scripts/release.sh --upload
 #
 # 产物：
 #   dist/release/<version>/sparrow-agent-<os>-<arch>   交叉编译产物
 #   dist/release/<version>/SHA256SUMS                  校验值清单
 #   dist/release/latest.json                           Agent 自更新清单（格式不变）
-#   dist/release/panel-release.json                    面板发布元信息（二进制不经过面板）
 #
-# 两种分发形态：
-#   - Agent 自更新 / 自建源：latest.json + 二进制（同目录，BASE_URL 可覆盖地址前缀）
-#   - 面板 s 节点安装：面板只提供 install.sh + /api/v1/public/agent/release 元信息，
-#     二进制由节点直接从 GitHub Release 下载
+# 分发形态：GitHub Release 是唯一真相。面板不存、不传二进制，只代理
+# /api/v1/public/agent/release（读 GitHub Release 的 browser_download_url + digest）。
+# 所以发布完不用再往面板写任何东西——面板下一次缓存过期（默认 10 分钟）自动跟上。
 #
 # 环境变量：
 #   VERSION       版本号（默认 git describe；不带 v 前缀）
@@ -93,8 +90,7 @@ rm -f "$DEST/SHA256SUMS"
 
 ASSETS=$(mktemp)
 SUMS=$(mktemp)
-PANEL_ASSETS=$(mktemp)
-trap 'rm -f "$ASSETS" "$SUMS" "$PANEL_ASSETS"' EXIT INT TERM HUP
+trap 'rm -f "$ASSETS" "$SUMS"' EXIT INT TERM HUP
 
 sha256_of() {
 	if command -v sha256sum >/dev/null 2>&1; then
@@ -131,11 +127,9 @@ for platform in $PLATFORMS; do
 		first=0
 		printf '    "%s": "%s"' "$platform" "$url" >>"$ASSETS"
 		printf '\n    "%s": "%s"' "$platform" "$sum" >>"$SUMS"
-		printf '\n    "%s": { "url": "%s", "sha256": "%s" }' "$platform" "$url" "$sum" >>"$PANEL_ASSETS"
 	else
 		printf ',\n    "%s": "%s"' "$platform" "$url" >>"$ASSETS"
 		printf ',\n    "%s": "%s"' "$platform" "$sum" >>"$SUMS"
-		printf ',\n    "%s": { "url": "%s", "sha256": "%s" }' "$platform" "$url" "$sum" >>"$PANEL_ASSETS"
 	fi
 	echo "  $platform  $sum"
 done
@@ -164,25 +158,9 @@ else
 	echo "==> 未提供 KEY，latest.json 未签名（Agent 配置了 update.public_key 时会拒绝升级）"
 fi
 
-# 面板用的发布元信息：只有 URL + sha256，二进制不经过面板
-cat >"$OUT_DIR/panel-release.json" <<EOF
-{
-  "version": "$VERSION",
-  "channel": "$CHANNEL",
-  "source": "$SOURCE",
-  "repo": "$REPO",
-  "tag": "$TAG",
-  "assets": {$(cat "$PANEL_ASSETS")
-  },
-  "installScript": "/agent/install.sh",
-  "signature": "$SIGNATURE"
-}
-EOF
-
 echo
 echo "产物："
-echo "  $OUT_DIR/latest.json（Agent 自更新）"
-echo "  $OUT_DIR/panel-release.json（面板发布元信息）"
+echo "  $OUT_DIR/latest.json（Agent 自更新；自建源用）"
 echo "  $DEST/（$(ls "$DEST" | wc -l | tr -d ' ') 个文件）"
 
 UPLOADED=0
@@ -205,7 +183,7 @@ if [ "$UPLOAD" -eq 1 ]; then
 
 - 通道: $CHANNEL
 - 平台: $PLATFORMS
-- 校验值: 见 SHA256SUMS（面板 /api/v1/public/agent/release 与 install.sh 使用同一份 sha256）"
+- 校验值: 见 SHA256SUMS（面板 /api/v1/public/agent/release 直接取 GitHub 的 asset digest）"
 		fi
 		UPLOADED=1
 		echo "  已上传：https://github.com/$REPO/releases/tag/$TAG"
@@ -215,17 +193,16 @@ fi
 echo
 echo "下一步："
 if [ "$UPLOADED" -eq 1 ]; then
-	echo "  把发布元信息写进面板（幂等）："
-	ROOT=$(cd ../.. && pwd)
-	echo "    cd $ROOT && node src/panel/scripts/publish-agent-release.mjs $OUT_DIR/panel-release.json"
+	echo "  完成。面板会在缓存过期后（默认 10 分钟）自动指向新版本，无需额外操作。"
+	echo "  想立刻生效："
 	if [ -n "${PANEL_URL:-}" ]; then
-		echo "  校验面板接口："
-		echo "    curl -s $PANEL_URL/api/v1/public/agent/release"
+		echo "    curl -s $PANEL_URL/api/v1/public/agent/release   # 确认版本与 sha256"
+	else
+		echo "    curl -s https://<面板地址>/api/v1/public/agent/release"
 	fi
+	echo "    （面板重启，或等 AGENT_RELEASE_TTL 秒）"
 else
 	echo "  手动上传（或装 gh 后加 --upload 重跑）："
 	echo "    gh release create $TAG $DEST/* $OUT_DIR/latest.json --title \"Agent $VERSION\""
-	echo "  然后写进面板："
-	ROOT=$(cd ../.. && pwd)
-	echo "    cd $ROOT && node src/panel/scripts/publish-agent-release.mjs $OUT_DIR/panel-release.json"
+	echo "  上传后无需写面板：/api/v1/public/agent/release 直接代理 GitHub Release。"
 fi

@@ -5,8 +5,9 @@
 #   ./install.sh --url https://panel.example.com --token <token>
 #   ./install.sh --url https://panel.example.com --from-url https://cdn/latest/sparrow-agent-linux-amd64 --sha256 <64hex>
 #
-# 二进制不再由面板托管：清单默认取 $PANEL_URL/api/v1/public/agent/release，
-# 里面的地址指向 GitHub Release（或自建 CDN），sha256 也必须由清单给出。
+# 二进制不由面板托管：清单默认取 $PANEL_URL/api/v1/public/agent/release
+# （面板实时代理 GitHub Release），里面的地址指向 GitHub（或自建 CDN），
+# sha256 来自 GitHub Release 的 asset digest，也必须由清单给出。
 #
 # 幂等：重复执行不会报错；升级时会先停服务、备份旧二进制（.bak）再替换。
 # 只做这几件事：装二进制、写配置（0600）、建数据目录、装 systemd 单元、enabl+start。
@@ -77,7 +78,7 @@ Sparrow Agent 安装脚本
                        覆盖安装路径，便于在容器里试运行
 
 示例:
-  # 面板已配置 Agent 发布源（默认取 /api/v1/public/agent/release）
+  # 默认从面板取（面板代理 GitHub Release）
   curl -fsSL https://panel.example.com/agent/install.sh | sudo sh -s -- \
     --url https://panel.example.com --token abc
 
@@ -85,7 +86,7 @@ Sparrow Agent 安装脚本
   sudo ./install.sh --url https://panel.example.com --token abc \
     --manifest https://cdn.example.com/sparrow-agent/latest.json
 
-  # 面板还没配置发布源：自带地址 + 校验值
+  # 面板取不到清单（GitHub 不可达 / 无 Release / 限流）：自带地址 + 校验值
   sudo ./install.sh --url https://panel.example.com --token abc \
     --from-url https://github.com/acme/sparrow/releases/download/agent%2Fv0.2.0/sparrow-agent-linux-amd64 \
     --sha256 9f8c...e1
@@ -263,7 +264,7 @@ sha256_of() {
 # ---------------------------------------------------------------- 清单解析
 #
 # 两种格式（见 docs/architecture/agent-cli.md §9）：
-#   新（面板 /api/v1/public/agent/release）：
+#   新（面板 /api/v1/public/agent/release，代理 GitHub Release）：
 #     { "assets": { "linux-amd64": { "url": "...", "sha256": "<64hex>" } } }
 #   旧（/agent/latest.json）：
 #     { "assets": { "linux-amd64": "<url>" }, "sha256": { "linux-amd64": "<64hex>" } }
@@ -410,7 +411,7 @@ if [ -n "$MANIFEST_URL" ]; then
 	MANIFEST_SOURCES=$MANIFEST_URL
 	MANIFEST_EXPLICIT=1
 else
-	# 新接口优先；旧路径兜底（面板未配置发布源时新接口返回 assets: {}）
+	# 新接口优先；旧路径兜底（GitHub 上还没有 agent/* Release 时新接口返回 assets: {}）
 	MANIFEST_SOURCES="$PANEL_URL/api/v1/public/agent/release $PANEL_URL/agent/latest.json"
 	MANIFEST_EXPLICIT=0
 fi
@@ -426,7 +427,7 @@ for _src in $MANIFEST_SOURCES; do
 
 	_platforms=$(manifest_platforms "$_file" || true)
 	if [ -z "$_platforms" ]; then
-		[ "$MANIFEST_EXPLICIT" -eq 1 ] && die "清单 $_src 里没有 assets（面板可能尚未配置 Agent 发布源）"
+		[ "$MANIFEST_EXPLICIT" -eq 1 ] && die "清单 $_src 里没有 assets（面板取到的 GitHub Release 里没有可用的 sparrow-agent-* 资产）"
 		warn "清单 $_src 没有 assets，尝试下一个来源"
 		continue
 	fi
@@ -498,8 +499,14 @@ if [ -z "$SHA256" ]; then
 		cat >&2 <<EOF
 [错误] 无法校验二进制，安装中止。
 
-面板没有提供可用的 Agent 发布清单（/api/v1/public/agent/release 与
-/agent/latest.json 都没取到 $PLATFORM 的地址与 sha256），
+面板没有返回可用的发布清单（/api/v1/public/agent/release 与
+/agent/latest.json 都没取到 $PLATFORM 的地址与 sha256）。
+
+常见原因：
+  - GitHub 上还没有 agent/* Release，或该 Release 缺 $PLATFORM 的资产
+  - 面板访问不了 api.github.com（防火墙 / 国外网络），或触发 GitHub 限流
+  - 节点的 $PLATFORM 不在本次发布范围内
+
 本脚本拒绝在无法校验 sha256 的情况下安装二进制。
 
 请改用下面任一方式：

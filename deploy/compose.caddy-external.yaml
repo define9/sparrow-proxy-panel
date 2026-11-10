@@ -56,6 +56,10 @@ services:
       MASTER_KEY: ${MASTER_KEY:?请在 .env 设置 MASTER_KEY（openssl rand -hex 32）}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?请在 .env 设置 NEXT_PUBLIC_SITE_URL}
       SETUP_TOKEN: ${SETUP_TOKEN:-}
+      # Agent 分发：面板只代理 GitHub Release，不存发布数据。留空用默认值。
+      AGENT_RELEASE_REPO: ${AGENT_RELEASE_REPO:-}
+      AGENT_RELEASE_TTL: ${AGENT_RELEASE_TTL:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     ports:
       # 同时保留回环端口：用于本机 curl 调试，或 Caddy 直接跑在宿主机上时
       - "127.0.0.1:${PANEL_PORT:-3000}:3000"

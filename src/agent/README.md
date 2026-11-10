@@ -133,22 +133,19 @@ chmod +x /tmp/agent/fake-singbox
 ### 一条命令生成发布物并上传 Release
 
 ```bash
-VERSION=0.2.0 TAG=agent/v0.2.0 \
-  PANEL_URL=https://panel.example.com \
-  sh scripts/release.sh --upload
+VERSION=0.2.0 TAG=agent/v0.2.0 sh scripts/release.sh --upload
 ```
 
 会做：`make cross` → 把产物复制到 `dist/release/<version>/` → 生成 `SHA256SUMS` →
 生成 `dist/release/latest.json`（Agent 自更新，格式不变）→
-生成 `dist/release/panel-release.json`（面板发布元信息）→
 `gh release create` 上传（没有 `gh` / 未登录时只产出本地文件并提示）。
 
-二进制**不进面板镜像**：面板只提供 `install.sh` 与 `GET /api/v1/public/agent/release`
-（URL + sha256），节点直接从 GitHub Release 下载。上传后把元信息写进面板（幂等）：
+**上传完就结束了**，不用再往面板写任何东西：
 
-```bash
-node src/panel/scripts/publish-agent-release.mjs   # 默认读 src/agent/dist/release/panel-release.json
-```
+- GitHub Release 是唯一真相（tag `agent/v*`，资产自带 `digest: sha256:…`）
+- 面板 `GET /api/v1/public/agent/release` 实时代理 GitHub，只做内存缓存
+  （`AGENT_RELEASE_TTL`，默认 600 秒）
+- 二进制**不进面板镜像**，节点直接从 GitHub Release 下载并校验 sha256
 
 `KEY=release.key` 时额外对 `latest.json` 的 sha256 字典签名（`KEY` 为空则跳过）。
 
@@ -175,14 +172,14 @@ gh release create agent/v0.2.0 dist/release/0.2.0/* dist/release/latest.json --t
 ### install.sh
 
 ```bash
-# 面板已配置「Agent 发布源」时：默认依次尝试 /api/v1/public/agent/release 与 /agent/latest.json
+# 默认从面板取（面板代理 GitHub Release）；依次尝试 /api/v1/public/agent/release 与 /agent/latest.json
 sudo ./install.sh --url https://panel.example.com --token <token>
 
 # 明确指定清单（本地路径 / file:// / http(s) 都行；面板版与最新版 latest.json 都兼容）
 sudo ./install.sh --url https://panel.example.com --token <token> \
   --manifest https://cdn.example.com/sparrow-agent/latest.json
 
-# 面板还没配置发布源：自带地址 + 校验值
+# 面板取不到清单（GitHub 不可达 / 无 Release / 限流）：自带地址 + 校验值
 sudo ./install.sh --url https://panel.example.com --token <token> \
   --from-url https://cdn.example.com/sparrow-agent/0.2.0/sparrow-agent-linux-amd64 \
   --sha256 <64 位 hex>

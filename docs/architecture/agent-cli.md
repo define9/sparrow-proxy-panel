@@ -6,9 +6,12 @@ Agent 与 Panel 是同一套协议、同一份签名向量，属于同一个产�
 但**面板不托管二进制**——7MB 文件 99.99% 的时间不参与运行，塞进镜像纯属浪费。
 
 ```
-面板（只提供元信息与安装脚本）
+GitHub Release（唯一真相：tag agent/v*，每个资产自带 digest: sha256:…）
+        │  GitHub REST API
+        ▼
+面板（只代理 + 带 TTL 缓存，不存储发布数据）
 ├── GET /agent/install.sh                     几 KB 纯文本，随面板构建期拷贝
-└── GET /api/v1/public/agent/release          发布元信息：版本 + 各平台 url + sha256
+└── GET /api/v1/public/agent/release          实时整理：版本 + 各平台 url + sha256
                     │
                     ▼ 节点执行
 curl .../agent/install.sh | sudo sh -s -- --url <面板> --token <令牌>
@@ -25,7 +28,12 @@ curl .../agent/install.sh | sudo sh -s -- --url <面板> --token <令牌>
 **边界**：
 - 面板**不**托管二进制、**不**在运行期编译 Agent（编译是 CI 的活）
 - 面板**不**执行任何来自第三方仓库的代码（见 [plugin-system](plugin-system.md) 安全红线）
-- 二进制的来源与 sha256 来自**发布流程**写入的 `settings.agent_release`，面板只读
+- 面板**不**往数据库存发布元数据：版本、地址、sha256 都在 GitHub Release 里，
+  面板只在内存里缓存整理后的结果（`AGENT_RELEASE_TTL`，默认 600 秒）。
+  存 DB 会引入「面板说 0.1.0、GitHub 已 0.2.0」的双写不一致，且 DB 重建/多套部署都要重写
+
+**为什么不是「发布时往面板写一次」**：双写反模式。发布流程只需
+`gh release create`，面板下一次缓存过期自动跟上；忘了写面板这种故障根本不会发生。
 
 ## 0. 实现状态（2026-11）
 
@@ -237,23 +245,34 @@ Agent 把内核的 per-user 计数（按 email 标签）映射为面板的 `uid`
 {
   "version": "0.1.0",
   "channel": "stable",
-  "source": "github",            // github（默认）/ custom-url（自建 CDN）/ none（未配置）
+  "source": "github",            // github（代理到的 Release）/ none（没有可用的 agent/* Release）
   "repo": "define9/sparrow-proxy-panel",
   "tag": "agent/v0.1.0",
   "assets": { "linux-amd64": { "url": "https://github.com/…/sparrow-agent-linux-amd64",
-                               "sha256": "<64hex>" } },
+                               "sha256": "<64hex>",
+                               "size": 7461424 } },
   "installScript": "/agent/install.sh",
-  "signature": ""
+  "signature": "",
+  "fetchedAt": "2026-11-10T15:25:30.451Z"  // 抓取时间，便于判断缓存是否过期
 }
 ```
 
 - 平台键与 `internal/update.PlatformKey()` 一致
-- 数据来源：`settings` 表 key = `agent_release`，由发布流程写入
-  （`src/agent/scripts/release.sh` → `panel-release.json` → `src/panel/scripts/publish-agent-release.mjs`），面板只读
-- 未配置时返回 `{ "source": "none", "assets": {} }` + HTTP 200，前端提示「尚未配置 Agent 发布源」
+- 数据来源：**GitHub Release**（`GET /repos/{repo}/releases`，只取 tag 以 `agent/` 开头、
+  非 draft、stable 通道排除 prerelease 的最新一条）。`url` 取自 `browser_download_url`，
+  `sha256` 取自资产的 `digest: sha256:…`，**不需要下载 SHA256SUMS**
+- 平台键由资产名推导：`sparrow-agent-linux-amd64` → `linux-amd64`（Windows 去掉 `.exe`）；
+  `SHA256SUMS` 之类不匹配的资产自动忽略
+- 面板内存在内存缓存（挂 `globalThis`，TTL 见 `AGENT_RELEASE_TTL`，默认 600s），
+  进程重启即失效，不影响正确性
+- Release 里没有可用资产 → `{ "source": "none", "assets": {} }` + HTTP 200
+- GitHub 不可达 / 限流 / 仓库 404 → **HTTP 503**，错误信息给出 `--manifest` / `--from-url` 出路
+  （未认证 60 次/小时/IP，可配 `GITHUB_TOKEN` 提高限额）
 - `install.sh` 同时兼容两种清单：本接口的 `{ url, sha256 }` 对象，和旧 `latest.json` 的
   `assets[platform] = url` + `sha256[platform] = hex`；清单来源依次尝试
   `--manifest` → `/api/v1/public/agent/release` → `/agent/latest.json`
+- 相关环境变量：`AGENT_RELEASE_REPO`（默认 `define9/sparrow-proxy-panel`）、
+  `AGENT_RELEASE_TTL`（秒）、`GITHUB_TOKEN`（可选，仅用于提高 GitHub 限额）
 
 ## 10. 可观测性
 

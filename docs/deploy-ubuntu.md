@@ -263,8 +263,9 @@ location / {
 ## 7. 节点接入（一条命令）
 
 二进制放在 **GitHub Release**，面板不托管：面板只提供安装脚本 `/agent/install.sh`
-和发布元信息 `GET /api/v1/public/agent/release`（各平台下载地址 + sha256），
-节点据此直接从 GitHub Release 下载并校验。面板镜像里不会多出 7MB 的二进制。
+和发布元信息 `GET /api/v1/public/agent/release`（**实时代理 GitHub Release** 得到各平台
+下载地址 + sha256），节点据此直接从 GitHub Release 下载并校验。面板镜像里不会多出 7MB
+二进制，数据库里也不存任何发布元数据。
 
 ### 7.1 发布 Agent（每次升级 Agent 后）
 
@@ -272,30 +273,30 @@ location / {
 
 ```bash
 cd src/agent
-VERSION=0.2.0 TAG=agent/v0.2.0 PANEL_URL=https://你的域名 \
-  sh scripts/release.sh --upload
-# 交叉编译 → 生成 latest.json + panel-release.json → gh release create
+VERSION=0.2.0 TAG=agent/v0.2.0 sh scripts/release.sh --upload
+# 交叉编译 → 生成 latest.json + SHA256SUMS → gh release create
 ```
 
-然后把发布元信息写进面板（幂等，需要能连到面板数据库）：
+**不需要再写面板**：GitHub Release 就是真相，面板按时（默认 10 分钟）或重启后自动跟上。
+
+验证面板接口（`source` 应为 `github`，`assets` 里有 6 个平台）：
 
 ```bash
-cd <repo 根目录>
-DATABASE_URL='postgresql://...' node src/panel/scripts/publish-agent-release.mjs
-```
-
-验证面板接口：
-
-```bash
-curl -fsSL https://你的域名/api/v1/public/agent/release | head -20
+curl -fsSL https://你的域名/api/v1/public/agent/release | head -30
 curl -fsSL -o /dev/null -w '%{http_code}\n' https://你的域名/agent/install.sh   # 200
 ```
+
+> 面板重启后可立刻拿到最新版本；不想等就 `docker compose restart panel`（缓存只在内存里）。
+> 面板容器需要能访问 `api.github.com`；未认证的限额是 60 次/小时/IP（有缓存，正常不会撞到），
+> 需要时给 panel 加环境变量 `GITHUB_TOKEN=ghp_xxx`。
+> 想把版本钉到别的仓库/分支：`AGENT_RELEASE_REPO=owner/repo`。
 
 `/agent/install.sh` 是构建期从 `src/agent/deploy/install.sh` 拷贝进镜像的（见 Dockerfile），
 升级安装脚本后重新构建面板镜像即可，不需要手工上传文件。
 
 > 之前 `deploy/build-agent.sh` + `./agent-dist` 挂载的做法已废弃（二进制不进面板）。
-> 只有要用自建 CDN 时，才用 `SOURCE=custom-url BASE_URL=...` 生成元信息并自己托管文件。
+> 只有要用自建 CDN 时，才用 `SOURCE=custom-url BASE_URL=...` 生成 `latest.json` 并自己托管文件，
+> 节点安装时用 `--manifest <你的 latest.json>`。
 
 ### 7.2 在节点上安装
 
@@ -308,7 +309,8 @@ curl -fsSL https://你的域名/agent/install.sh | sudo sh -s -- \
 ```
 
 安装脚本默认依次尝试面板的 `/api/v1/public/agent/release` 与旧路径 `/agent/latest.json`；
-面板还没配置发布源时会明确报错并列出可用方式。
+两者都拿不到当前平台的地址与 sha256 时会中止，并提示可用 `--manifest` / `--from-url` 手动指定
+（常见于 GitHub 上还没有 `agent/*` Release、面板被墙、或节点架构不在发布范围）。
 
 脚本会：校验 sha256 → 装二进制到 `/usr/local/bin/sparrow-agent` → 写 `/etc/sparrow-agent/config.yaml`（0600）→ 创建数据目录 → 调用 `register` 拿 `node_id/node_secret` → 装 systemd 单元并启动。
 
@@ -328,9 +330,9 @@ sudo journalctl -u sparrow-agent -f
 ### 7.4 升级 Agent
 
 ```bash
-# 开发机：发布新版本并更新面板元信息（见 7.1）
+# 开发机：发布新版本（见 7.1）——不需要碰面板
 VERSION=0.2.1 TAG=agent/v0.2.1 sh scripts/release.sh --upload
-node src/panel/scripts/publish-agent-release.mjs
+docker compose restart panel    # 可选：让面板缓存立刻刷新，否则等 10 分钟
 
 # 每个节点（幂等，会先停服务再替换）
 curl -fsSL https://你的域名/agent/install.sh | sudo sh -s -- --url https://你的域名
