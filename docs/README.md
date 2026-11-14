@@ -43,6 +43,7 @@
 |---|---|---|
 | 19 | [roadmap.md](roadmap.md) | P0–P3、验收标准、风险登记（**唯一的进度记录**） |
 | 20 | [deploy-ubuntu.md](deploy-ubuntu.md) | 部署手册：装环境、起服务、反代、初始化、备份、排障 |
+| 21 | [deploy-ipv6-home.md](deploy-ipv6-home.md) | 家庭机器 + 公网 IPv6 部署：Docker IPv6、地址写法、纯 HTTP 注意事项 |
 
 ## 已锁定的核心决策
 

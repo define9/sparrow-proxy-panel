@@ -43,11 +43,21 @@ sudo ./up.sh --domain panel.example.com
 `up.sh` 做的事：
 
 1. 没有 `.env` 就生成：随机 `POSTGRES_PASSWORD`、`MASTER_KEY`、`SETUP_TOKEN`
-2. 域名 → 自动写 `SITE_DOMAIN` 与 `NEXT_PUBLIC_SITE_URL`
+2. 域名 → 自动写 `SITE_DOMAIN` 与 `SITE_URL`（+ 兼容用的 `NEXT_PUBLIC_SITE_URL`）
 3. `docker compose up -d --build`
 4. 等 `panel` healthy，打印站点地址与初始化令牌
 
 无域名/内网：`./up.sh`（默认 `:80` 纯 HTTP）。其它参数：`--email`、`--no-build`、`--down`。
+
+常用参数：
+
+| 参数 | 说明 |
+|---|---|
+| `--domain <d>` | 内置 Caddy 的站点。`:80` = 纯 HTTP（无域名） |
+| `--site-url <url>` | 站点对外地址（订阅链接、支付回调用）。IPv6 要带方括号 |
+| `--bind <addr>` | panel 监听地址。留空 = 所有接口；默认 `127.0.0.1`（只给反代用） |
+| `--port <n>` | panel 端口，默认 3000 |
+| `--no-caddy` | 不启内置反代（机器上已有 Caddy/Nginx 时用） |
 
 ### 起来了什么
 
@@ -59,6 +69,9 @@ caddy（可选）     80/443      内置反代：自动签证书
 ```
 
 `caddy` 在 compose 的 `edge` profile 里，`./up.sh` 默认带上；加 `--no-caddy` 就不启动它。
+
+> **只有公网 IPv6 的家庭机器**：Docker 要开 IPv6、IPv6 地址要带方括号，
+> 详见 [deploy-ipv6-home.md](deploy-ipv6-home.md)。
 
 ## 3. 首次初始化
 

@@ -1,4 +1,5 @@
 import type { Order, Plan, Subscription } from '@sparrow/contracts'
+import { siteOrigin } from '@/lib/site-origin'
 
 /**
  * 管理端展示字典。
@@ -45,8 +46,10 @@ export const subscriptionFormatLabels: Record<Subscription['format'], string> = 
   singbox: 'sing-box'
 }
 
-/** 订阅链接：优先用站点域名，避免部署后仍显示演示域名 */
+/**
+ * 订阅链接：用 siteOrigin()（客户端取浏览器当前 origin，服务端取环境变量）。
+ * 直接读 NEXT_PUBLIC_SITE_URL 会在客户端被构建期内联成 localhost —— 详见 lib/site-origin.ts。
+ */
 export function subscriptionLink(token: string) {
-  const origin = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '')
-  return `${origin}/sub/${token}`
+  return `${siteOrigin()}/sub/${token}`
 }

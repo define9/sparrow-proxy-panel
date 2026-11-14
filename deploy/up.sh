@@ -14,6 +14,10 @@
 #   ./up.sh --pull                           # 先 git pull 再构建
 #   ./up.sh --no-build                       # 不重建镜像，只重启
 #   ./up.sh --down                           # 停止
+#
+# IPv6 / 直连（无反代）：
+#   ./up.sh --no-caddy --site-url 'http://[240e::1]:8080' --bind '' --port 8080
+#   （--bind '' = 监听所有接口；IPv6 字面量必须带方括号）
 # ============================================================
 set -euo pipefail
 
@@ -22,6 +26,10 @@ cd "$(dirname "$0")"
 
 DOMAIN=""
 EMAIL=""
+SITE_URL_OVERRIDE=""
+BIND=""
+BIND_SET=0
+PORT=""
 DO_BUILD=1
 DO_PULL=0
 EDGE=1          # 1 = 内置 caddy（compose profile: edge）；0 = 只跑数据库 + 面板
@@ -31,15 +39,39 @@ log()  { printf '\033[32m→\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m!\033[0m %s\n' "$*"; }
 die()  { printf '\033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
 
+# 猜本机对外地址（无域名时用）。
+# IPv6 必须带方括号：http://[240e::1]:80 —— 直接拼 "http://240e::1" 是非法 URL。
+detect_local_origin() {
+  # 优先 IPv4（兼容性最好）
+  local v4
+  v4=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([^ ]*\).*/\1/p' | head -1)
+  if [[ -n "$v4" ]]; then
+    printf 'http://%s' "$v4"
+    return 0
+  fi
+  # 退到网卡地址（取第一个全局 IPv6，排除链路本地 fe80::）
+  local v6
+  v6=$(ip -6 addr show scope global 2>/dev/null | sed -n 's/.*inet6 \([0-9a-fA-F:]*\).*/\1/p' | head -1)
+  if [[ -n "$v6" ]]; then
+    printf 'http://[%s]' "$v6"
+    return 0
+  fi
+  printf 'http://localhost'
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --domain) DOMAIN="${2:?}"; shift 2 ;;
     --email)  EMAIL="${2:?}"; shift 2 ;;
+    --site-url) SITE_URL_OVERRIDE="${2:?}"; shift 2 ;;
+    # --bind 允许空值（'' = 监听所有接口），所以不能用 ${2:?}
+    --bind)   BIND="${2-}"; BIND_SET=1; shift 2 ;;
+    --port)   PORT="${2:?}"; shift 2 ;;
     --no-build) DO_BUILD=0; shift ;;
     --pull) DO_PULL=1; shift ;;
     --no-caddy) EDGE=0; shift ;;
     --down) ACTION="down"; shift ;;
-    -h|--help) sed -n '2,18p' "$SELF"; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$SELF"; exit 0 ;;
     *) die "未知参数: $1（--help 查看用法）" ;;
   esac
 done
@@ -102,24 +134,41 @@ fi
 # ---------- 1. .env ----------
 gen() { openssl rand -hex "$1"; }
 
+# 覆盖 .env 里的某个键（存在就改，不存在就追加），改完重新加载。
+# 用 awk 整行替换而不是 sed：值里可能有 IPv6 的方括号（http://[240e::1]:8080）、
+# 特殊字符、& 等，sed 逐个转义太脆弱。
+set_env() {
+  local key="$1" value="$2"
+  awk -v k="$key" -v v="$value" '
+    BEGIN { FS = OFS = "=" }
+    $1 == k { print k "=" v; found = 1; next }
+    { print }
+    END { if (!found) print k "=" v }
+  ' .env > .env.tmp && mv .env.tmp .env
+  set -a; . ./.env; set +a
+}
+
 if [[ -f .env ]]; then
   log ".env 已存在（保留现有密钥，不覆盖 MASTER_KEY）"
   set -a; . ./.env; set +a
 
   if [[ -n "$DOMAIN" ]]; then
-    grep -q '^SITE_DOMAIN=' .env && sed -i "s|^SITE_DOMAIN=.*|SITE_DOMAIN=$DOMAIN|" .env || echo "SITE_DOMAIN=$DOMAIN" >> .env
+    set_env SITE_DOMAIN "$DOMAIN"
     SITE_DOMAIN="$DOMAIN"
   fi
   if [[ -n "$EMAIL" ]]; then
-    grep -q '^ACME_EMAIL=' .env && sed -i "s|^ACME_EMAIL=.*|ACME_EMAIL=$EMAIL|" .env || echo "ACME_EMAIL=$EMAIL" >> .env
+    set_env ACME_EMAIL "$EMAIL"
   fi
   grep -q '^SETUP_TOKEN=' .env || echo "SETUP_TOKEN=$(gen 16)" >> .env
   set -a; . ./.env; set +a
 else
   [[ -n "$DOMAIN" ]] || { DOMAIN=":80"; warn "未指定 --domain，使用纯 HTTP(:80)"; }
 
-  if [[ "$DOMAIN" = ":80" ]]; then
-    SITE_URL="http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo localhost)"
+  if [[ -n "$SITE_URL_OVERRIDE" ]]; then
+    SITE_URL="$SITE_URL_OVERRIDE"
+  elif [[ "$DOMAIN" = ":80" ]]; then
+    # 无域名：猜本机对外地址。IPv6 必须带方括号，否则 URL 非法。
+    SITE_URL="http://$(detect_local_origin)"
   else
     SITE_URL="https://${DOMAIN#http*://}"
   fi
@@ -134,23 +183,39 @@ POSTGRES_DB=sparrow
 TZ=Asia/Shanghai
 
 MASTER_KEY=$(gen 32)
+# 站点对外地址。SITE_URL 是运行时读取（改了立即生效），
+# NEXT_PUBLIC_SITE_URL 会被构建期内联进前端 bundle，仅作兼容保留。
+SITE_URL=$SITE_URL
 NEXT_PUBLIC_SITE_URL=$SITE_URL
 SETUP_TOKEN=$(gen 16)
 
 SITE_DOMAIN=$DOMAIN
 ACME_EMAIL=$EMAIL
+
+# panel 监听：PANEL_BIND 留空 = 所有接口（IPv4+IPv6 直连）；默认只绑回环给反代用
+PANEL_BIND=$BIND
+PANEL_PORT=${PORT:-3000}
 EOF
   chmod 600 .env
   set -a; . ./.env; set +a
 fi
 
-# 域名与站点地址保持同步
+# 应用本次传入的覆盖项
+[[ -n "$SITE_URL_OVERRIDE" ]] && {
+  set_env SITE_URL "$SITE_URL_OVERRIDE"
+  set_env NEXT_PUBLIC_SITE_URL "$SITE_URL_OVERRIDE"
+}
+[[ -n "$PORT" ]] && set_env PANEL_PORT "$PORT"
+# BIND 可能是空字符串（= 监听所有接口），所以用「参数是否传了」判断而不是值是否为空
+[[ "$BIND_SET" -eq 1 ]] && set_env PANEL_BIND "$BIND"
+
+# 域名与站点地址保持同步（改域名时一并更新两个变量）
 if [[ -n "${SITE_DOMAIN:-}" && "$SITE_DOMAIN" != ":80" && "$SITE_DOMAIN" != http* ]]; then
   WANT_URL="https://$SITE_DOMAIN"
-  if [[ "${NEXT_PUBLIC_SITE_URL:-}" != "$WANT_URL" ]]; then
-    sed -i "s|^NEXT_PUBLIC_SITE_URL=.*|NEXT_PUBLIC_SITE_URL=$WANT_URL|" .env
-    set -a; . ./.env; set +a
-    log "同步 NEXT_PUBLIC_SITE_URL=$WANT_URL"
+  if [[ "${SITE_URL:-}" != "$WANT_URL" ]]; then
+    set_env SITE_URL "$WANT_URL"
+    set_env NEXT_PUBLIC_SITE_URL "$WANT_URL"
+    log "同步站点地址为 $WANT_URL"
   fi
 fi
 

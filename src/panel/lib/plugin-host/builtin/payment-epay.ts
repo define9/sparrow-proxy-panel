@@ -51,14 +51,14 @@ export const paymentEpay: BuiltinPlugin = {
           title: '异步回调地址',
           format: 'uri',
           'x-placeholder': '留空使用站点默认地址',
-          description: '留空则用 NEXT_PUBLIC_SITE_URL/api/v1/pay/epay/callback'
+          description: '留空则用 SITE_URL/api/v1/pay/epay/callback'
         },
         returnUrl: {
           type: 'string',
           title: '同步跳转地址',
           format: 'uri',
           'x-placeholder': '留空使用站点默认地址',
-          description: '留空则用 NEXT_PUBLIC_SITE_URL/dashboard/orders'
+          description: '留空则用 SITE_URL/dashboard/orders'
         }
       }
     },

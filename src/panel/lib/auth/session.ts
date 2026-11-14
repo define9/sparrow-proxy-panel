@@ -9,6 +9,25 @@ import type { Session } from '@/lib/auth/types'
 export const SESSION_COOKIE = 'spx_session'
 const SESSION_TTL_DAYS = 7
 
+/**
+ * 会话 cookie 是否带 Secure 属性。
+ *
+ * 默认：站点对外地址是 https → Secure；是 http → 不带。
+ * 不能简单用 NODE_ENV === 'production'：纯 HTTP 部署（内网/无域名/IPv6 直连）
+ * 时浏览器会拒收带 Secure 的 cookie，表现为「登录后立刻跳回登录页」，极难排查。
+ *
+ * 用 SITE_URL（不带 NEXT_PUBLIC_ 前缀 → 运行时读取，构建期内联拿不到真实值）。
+ *
+ * 显式覆盖：COOKIE_SECURE=1/true 强制开，=0/false 强制关。
+ */
+export function cookieSecure(): boolean {
+  const explicit = process.env.COOKIE_SECURE?.trim().toLowerCase()
+  if (explicit === '1' || explicit === 'true') return true
+  if (explicit === '0' || explicit === 'false') return false
+  const siteUrl = (process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || '').trim().toLowerCase()
+  return siteUrl.startsWith('https://')
+}
+
 export function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex')
 }
@@ -29,7 +48,7 @@ export async function createSession(userId: string, meta: { ip?: string; userAge
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: cookieSecure(),
     path: '/',
     expires: expiresAt
   })

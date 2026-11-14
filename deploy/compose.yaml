@@ -18,6 +18,8 @@ services:
       timeout: 3s
       retries: 10
     # 不映射端口：只在 compose 内网可达（需要外部调试时临时加 127.0.0.1:5432:5432）
+    networks:
+      - sparrow
 
   # 一次性迁移任务：成功退出后 panel 才启动
   migrate:
@@ -31,6 +33,8 @@ services:
       postgres:
         condition: service_healthy
     restart: "no"
+    networks:
+      - sparrow
 
   panel:
     build:
@@ -42,7 +46,10 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-sparrow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sparrow}
       MASTER_KEY: ${MASTER_KEY:?请在 deploy/.env 里设置 MASTER_KEY}
-      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?请在 deploy/.env 里设置 NEXT_PUBLIC_SITE_URL}
+      # 站点对外地址。SITE_URL 运行时读取（改完重启即生效）；
+      # NEXT_PUBLIC_SITE_URL 会被构建期内联进前端 bundle，仅作兼容保留。
+      SITE_URL: ${SITE_URL:-${NEXT_PUBLIC_SITE_URL:?请在 .env 里设置 SITE_URL}}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-${SITE_URL:?请在 .env 里设置 SITE_URL}}
       SETUP_TOKEN: ${SETUP_TOKEN:-}
       # Agent 分发：面板只代理 GitHub Release，不存发布数据。留空用默认值。
       AGENT_RELEASE_REPO: ${AGENT_RELEASE_REPO:-}
@@ -59,9 +66,12 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 3
-    # 只绑定宿主回环：外部 Caddy/Nginx 反代到这里；内置 caddy 也走它
+    # 默认只绑定宿主回环：外部 Caddy/Nginx 反代到这里；内置 caddy 也走它。
+    # 想直接对外（IPv6 直连、无反代）：deploy/.env 里设 PANEL_BIND=（留空 = 所有接口）
     ports:
-      - "127.0.0.1:${PANEL_PORT:-3000}:3000"
+      - "${PANEL_BIND:-127.0.0.1}:${PANEL_PORT:-3000}:3000"
+    networks:
+      - sparrow
 
   # 可选：机器上没有统一反代时启用（--profile edge）
   caddy:
@@ -82,6 +92,12 @@ services:
     depends_on:
       panel:
         condition: service_started
+    networks:
+      - sparrow
+
+networks:
+  sparrow:
+    driver: bridge
 
 volumes:
   sparrow-pgdata:

@@ -75,6 +75,8 @@ sudo ./up.sh --no-caddy --domain panel.example.com   # 只跑 DB + 面板，反�
 
 完整步骤（初始化、备份、升级、排障、节点接入）见 **[docs/deploy-ubuntu.md](docs/deploy-ubuntu.md)**。
 
+**只有公网 IPv6 的家庭机器**见 **[docs/deploy-ipv6-home.md](docs/deploy-ipv6-home.md)**（Docker 要开 IPv6，IPv6 字面量要带方括号）。
+
 ## 文档
 
 - 索引：[docs/README.md](docs/README.md)

@@ -15,6 +15,7 @@
 # 参数：
 #   --swap [大小]   可选：创建 swap（默认 2G），低内存机器构建时需要
 #   --firewall      可选：启用 ufw 并只放行 22/80/443
+#   --ipv6          可选：开启 Docker IPv6（原生 IPv6 公网机器必须）
 #   --no-docker     跳过 Docker 安装（已装好时用）
 # ============================================================
 set -euo pipefail
@@ -22,6 +23,7 @@ set -euo pipefail
 SWAP_SIZE=""
 FIREWALL=0
 INSTALL_DOCKER=1
+IPV6=0
 
 log()  { printf '\033[32m→\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m!\033[0m %s\n' "$*"; }
@@ -33,7 +35,8 @@ while [[ $# -gt 0 ]]; do
       if [[ "${2:-}" =~ ^[0-9]+[GgMm]?$ ]]; then SWAP_SIZE="$2"; shift 2; else SWAP_SIZE="2G"; shift; fi ;;
     --firewall) FIREWALL=1; shift ;;
     --no-docker) INSTALL_DOCKER=0; shift ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    --ipv6) IPV6=1; shift ;;
+    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
     *) die "未知参数: $1（--help 查看用法）" ;;
   esac
 done
@@ -98,7 +101,50 @@ if [[ "$INSTALL_DOCKER" -eq 1 ]] || command -v docker >/dev/null 2>&1; then
   log "compose 插件：$(docker compose version --short 2>/dev/null || echo ok)"
 fi
 
-# ---------- 4. 防火墙（可选）----------
+# ---------- 4. Docker IPv6（原生 IPv6 机器需要）----------
+# 只有 IPv6 公网地址的机器，Docker 默认只发布 IPv4 端口 → 外部访问不到。
+# 打开后容器的 ports 会同时监听 [::]，宿主 IPv6 直连即可。
+# 不影响已有 IPv4 部署：daemon.json 里开启 ipv6 只是让 dockerd 自己有 IPv6 地址。
+if [[ "$IPV6" -eq 1 ]]; then
+  log "开启 Docker IPv6"
+  install -d -m 0755 /etc/docker
+  if [[ -f /etc/docker/daemon.json ]]; then
+    # 已有配置：合并 ipv6 键，不覆盖别的设置
+    cp /etc/docker/daemon.json "/etc/docker/daemon.json.bak.$(date +%s)"
+    python3 - <<'PY'
+import json
+p = '/etc/docker/daemon.json'
+try:
+    with open(p) as f:
+        d = json.load(f)
+except Exception:
+    d = {}
+d['ipv6'] = True
+d.setdefault('experimental', True)
+d.setdefault('fixed-cidr-v6', 'fd00:dead:beef::/48')
+with open(p, 'w') as f:
+    json.dump(d, f, indent=2)
+print('  daemon.json:', json.dumps(d, ensure_ascii=False))
+PY
+  else
+    cat >/etc/docker/daemon.json <<'EOF'
+{
+  "ipv6": true,
+  "experimental": true,
+  "fixed-cidr-v6": "fd00:dead:beef::/48"
+}
+EOF
+    echo "  已写入 /etc/docker/daemon.json"
+  fi
+  systemctl restart docker
+  sleep 3
+  docker info >/dev/null 2>&1 || die "重启 Docker 后不可用：journalctl -u docker -n 50"
+  log "Docker IPv6 已开启"
+else
+  warn "未开启 Docker IPv6（原生 IPv6 机器加 --ipv6；IPv4 机器不需要）"
+fi
+
+# ---------- 5. 防火墙（可选）----------
 if [[ "$FIREWALL" -eq 1 ]]; then
   log "配置 ufw（只放行 22/80/443）"
   apt-get install -y -qq ufw

@@ -54,15 +54,19 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-sparrow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sparrow}
       MASTER_KEY: ${MASTER_KEY:?请在 .env 设置 MASTER_KEY（openssl rand -hex 32）}
-      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?请在 .env 设置 NEXT_PUBLIC_SITE_URL}
+      # 站点对外地址。SITE_URL 运行时读取（改完重启即生效）；
+      # NEXT_PUBLIC_SITE_URL 会被构建期内联进前端 bundle，仅作兼容保留。
+      SITE_URL: ${SITE_URL:-${NEXT_PUBLIC_SITE_URL:?请在 .env 设置 SITE_URL}}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-${SITE_URL:?请在 .env 设置 SITE_URL}}
       SETUP_TOKEN: ${SETUP_TOKEN:-}
       # Agent 分发：面板只代理 GitHub Release，不存发布数据。留空用默认值。
       AGENT_RELEASE_REPO: ${AGENT_RELEASE_REPO:-}
       AGENT_RELEASE_TTL: ${AGENT_RELEASE_TTL:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     ports:
-      # 同时保留回环端口：用于本机 curl 调试，或 Caddy 直接跑在宿主机上时
-      - "127.0.0.1:${PANEL_PORT:-3000}:3000"
+      # 默认只绑回环（Caddy/Nginx 在宿主机上时用）。
+      # 想直接对外（IPv6 直连、无反代）：.env 里设 PANEL_BIND=（留空 = 所有接口）
+      - "${PANEL_BIND:-127.0.0.1}:${PANEL_PORT:-3000}:3000"
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,7 +1,10 @@
 # 由环境变量驱动（见 deploy/.env）
 #   SITE_DOMAIN=panel.example.com → 自动申请证书走 HTTPS
-#   SITE_DOMAIN=:80               → 纯 HTTP（无域名/内网测试）
+#   SITE_DOMAIN=:80               → 纯 HTTP（无域名/内网/IPv6 直连）
 # 两个变量都带默认值：环境变量为空时不会生成非法配置（这是之前重启循环的原因）
+#
+# 监听范围：`:80` / 域名形式都绑定**所有**接口（IPv4 + IPv6），
+# 所以原生 IPv6 的机器不需要额外配置 Caddy 侧。
 
 {
 	# 必须非空：LET'S ENCRYPT 账号邮箱。compose 已兜底为 ops@example.com
@@ -20,8 +23,12 @@
 	header @sub Cache-Control "private, max-age=60"
 
 	reverse_proxy panel:3000 {
-		header_up X-Forwarded-For {remote_host}
+		# Caddy 默认已设置 X-Forwarded-For/Proto/Host，这里显式补齐：
+		# 面板据此还原真实协议（纯 HTTP 部署时尤其重要）
 		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
 	}
 
 	log {

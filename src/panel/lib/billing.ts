@@ -1,4 +1,5 @@
 import type { Order, Plan, Subscription } from '@sparrow/contracts'
+import { siteOrigin } from '@/lib/site-origin'
 
 /**
  * 商品 / 订单 / 订阅的展示辅助（纯函数，客户端可用）。
@@ -42,11 +43,14 @@ export const SUBSCRIPTION_FORMATS: Array<{
   { value: 'singbox', label: 'sing-box', hint: 'sing-box / SFI / SFA' }
 ]
 
-/** 订阅输出在站点同域的 /sub/{token}，格式通过 ?target= 指定 */
-const SITE_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/$/, '')
-
+/**
+ * 订阅输出在站点同域的 /sub/{token}，格式通过 ?target= 指定。
+ *
+ * 用 siteOrigin() 而不是直接读 NEXT_PUBLIC_SITE_URL：后者在客户端组件里
+ * 会被构建期内联成 localhost（详见 lib/site-origin.ts 的说明）。
+ */
 export function subscriptionUrl(token: string, format: SubscriptionFormat) {
-  return `${SITE_ORIGIN}/sub/${token}?target=${format}`
+  return `${siteOrigin()}/sub/${token}?target=${format}`
 }
 
 export interface TimelineStep {

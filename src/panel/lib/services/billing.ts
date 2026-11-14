@@ -33,7 +33,17 @@ const HOUR = 3_600_000
 const DAY = 86_400_000
 const ORDER_TTL_HOURS = 2
 
-const SITE_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/$/, '')
+/**
+ * 服务端生成的绝对地址。
+ *
+ * 用 SITE_URL（不带 NEXT_PUBLIC_ 前缀）而不是 NEXT_PUBLIC_SITE_URL：
+ * 后者会被构建期内联成构建时的值，容器里改环境变量不生效。
+ * 详见 lib/site-origin.ts。
+ */
+const SITE_ORIGIN = (process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(
+  /\/$/,
+  ''
+)
 
 /* ------------------------------- 行 → DTO -------------------------------- */
 
